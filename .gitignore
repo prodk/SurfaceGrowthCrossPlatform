@@ -1,0 +1,12 @@
+Debug
+Release
+*sdf
+*.ncb
+ipch
+*.suo
+*.user
+*.pdb
+*.o
+.vs
+x64
+SurfaceGrowthCrossPlatform/x64
