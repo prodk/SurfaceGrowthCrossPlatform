@@ -10,15 +10,19 @@
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
-//#include <sm_12_atomic_functions.h>
 
 #include <cstdlib>
 #include <cstdio>
-#include <string.h>
+#include <string>
+
+///@todo: replace with C++ headers.
 #include <math.h>
 #include <time.h>
-#include <tchar.h>
-#include <conio.h>
+
+///@todo: remove
+//#include <tchar.h>
+//#include <conio.h>
+
 #include <iostream>
 
 #include "math_constants.h"
@@ -28,10 +32,7 @@
 #define __CUDACC__					// For atomic functions.
 #endif
 
-//#include <sm_11_atomic_functions.h>	
-//#include <sm_12_atomic_functions.h>	// For atomic functions.
-
-#include <device_atomic_functions.h>
+#include <device_atomic_functions.h> // For atomic functions.
 
 #include "ComputeDefs.h"			// For computations.
 

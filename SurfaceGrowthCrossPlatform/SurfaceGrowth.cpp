@@ -101,7 +101,7 @@ float4	*g_dcolor;			// Device array for color.
 /////////////////////////
 // Program's entry point.
 /////////////////////////
-int _tmain(int argc, _TCHAR* argv[])
+int main(int argc, TCHAR* argv[])
 {
 	int deviceCount;
 
