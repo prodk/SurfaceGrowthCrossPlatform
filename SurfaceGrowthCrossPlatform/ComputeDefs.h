@@ -31,19 +31,19 @@ typedef unsigned short ushort;
 
 // structures
 typedef struct _VecR2
-{real x, y;} 
+{real x, y;}
 VecR2;
 
 typedef struct _VecR3
-{real x, y, z;} 
+{real x, y, z;}
 VecR3;
 
 typedef struct _VecI2
-{int x, y;} 
+{int x, y;}
 VecI2;
 
 typedef struct _VecI3
-{int x, y, z;} 
+{int x, y, z;}
 VecI3;
 
 typedef VecR3 VecR;
@@ -231,6 +231,6 @@ typedef VecI3 VecI;
 }
 
 // number of cells in long path
-#define N_OFFSET_LONG  27	
+#define N_OFFSET_LONG  27
 
-#endif		// end __COMPUTE_DEFS__
+#endif      // end __COMPUTE_DEFS__
