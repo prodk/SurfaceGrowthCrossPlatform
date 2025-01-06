@@ -1,9 +1,8 @@
 //-------------------------------------------------------------
-// SurfaceGrowth.cu - contains kernel functions for computing,
+// SurfaceGrowth.cu - kernel functions for computing,
 // C wrappers for some of the CUDA API and wrappers for the
 // kernels for convenient calling from "SurfaceGrowth.cpp"
-// (c) 2010 Mykola Prodanov
-// (this code was written in Sumy, Ukraine)
+// (c) 2010 - 2025 Mykola Prodanov
 //-------------------------------------------------------------
 #include "SurfaceGrowth.h"          // Cuda headers and prototypes.
 
@@ -2011,7 +2010,7 @@ extern "C"  // Can be deleted, but then also in SurfaceGrowth.h.
 
 // Calls computational kernels when OpenGL is not used.
 char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
-                     FILE *fResults, TCHAR *szPdbPath)
+                     FILE *fResults, char *szPdbPath)
 {
     // Pointers to host memory.
     uint    *hHistRdf = 0;
@@ -2031,7 +2030,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             AllocMem(tBuf[nb].rrDiffuse, hparams->nValDiffuse, real);
         InitDiffusion(tBuf, rrDiffuseAv, hparams);
         // Open file for diffusion.
-        if( (fileDiffuse = _tfopen(hparams->szDiffusePath, TEXT("w"))) == NULL ){
+        if( (fileDiffuse = fopen(hparams->szDiffusePath, TEXT("w"))) == NULL ){
             lstrcpy(szPdbPath, "Cannot open diffuse file!");
             return szPdbPath;
         }
@@ -2736,7 +2735,7 @@ int CreatePdbFile(char *szPdb, SimParams *hparams, float4 *r)
     int i;
     int n = 0;
     real m = 0.f;
-    TCHAR szFileName[MAX_PATH],szBuf[MAX_PATH];
+    char szFileName[MAX_PATH],szBuf[MAX_PATH];
 
     ZeroMemory(szBuf, MAX_PATH);
 
@@ -2813,7 +2812,7 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
 {
     real rb;
     int n;
-    TCHAR szFileName[MAX_PATH], szBuf[MAX_PATH];
+    char szFileName[MAX_PATH], szBuf[MAX_PATH];
     ZeroMemory(szFileName, MAX_PATH);
     // Define filename.
     sprintf(szBuf, TEXT("_stepCount_%i_"), hparams->stepCount);

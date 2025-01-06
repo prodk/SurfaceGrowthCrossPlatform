@@ -1,7 +1,6 @@
 //----------------------------------------------
 // ComputeDefs.h - definitions for computations
-// (c) 2010 Mykola Prodanov
-// (this code was written in Sumy, Ukraine)
+// (c) 2010 - 2025 Mykola Prodanov
 //----------------------------------------------
 //-------------------------------------------------------------------
 // Most of the macroses are from the code accompanying the book

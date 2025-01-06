@@ -1,7 +1,6 @@
 //---------------------------------------------------------------------
-// SurfaceGrowth.cpp - contains program's entry point and UI management
-// (c) 2010 Mykola Prodanov
-// (this code was written in Sumy, Ukraine)
+// SurfaceGrowth.cpp - program's entry point, input/output management.
+// (c) 2010 - 2025 Mykola Prodanov
 //---------------------------------------------------------------------
 
 #include "SurfaceGrowthProto.h" // Contains necessary definitions and function prototypes.
@@ -11,35 +10,35 @@
 ///////////
 cudaDeviceProp g_hDeviceProp;                   // Device properties.
 
-TCHAR   g_szAppName[] = TEXT("SurfaceGrowth");  // Application name.
-TCHAR*  g_szCmdLine;                            // Command line for CudaInitW.
+char   g_szAppName[] = TEXT("SurfaceGrowth");  // Application name.
+char*  g_szCmdLine;                            // Command line for CudaInitW.
 
 // File variables.
 // Beginning of the file names.
-TCHAR   g_szResult[MAX_PATH] = TEXT("sg"),
+char   g_szResult[MAX_PATH] = TEXT("sg"),
         g_szPdb[MAX_PATH] = TEXT("sugr"),
         g_szRdf[MAX_PATH] = TEXT("rdf");
 FILE*   g_fResult = NULL;                       // Output file descriptor.
 FILE*   g_fPdb = NULL;                          // Pdb file.
 FILE*   g_fRdf = NULL;                          // Radial distribution function file.
-BOOL    g_bResult = 1;                          // Whether to create the output file.
-BOOL    g_bPdb = 1;
-BOOL    g_bRdf = 1;
+bool    g_bResult = true;                       // Whether to create the output file.
+bool    g_bPdb = true;
+bool    g_bRdf = true;
 
-TCHAR *g_szInpFile = TEXT("sugr_in.txt");       // Input file.
+char *g_szInpFile = TEXT("sugr_in.txt");       // Input file.
 
 // Backup variables.
-TCHAR*  gszBckup[] = {TEXT("bckup0.sugr"),TEXT("bckup1.sugr")};// Note 2 backup files.
-BOOL    gbBckup = FALSE;                        // Whether to use backup.
-BOOL    gbStartBckup = FALSE;                   // Whether to start from backup file.
-int     g_hstepBckup = 10000;                   // How often backup file is created.
+char*  gszBckup[] = {TEXT("bckup0.sugr"),TEXT("bckup1.sugr")};// Note 2 backup files.
+bool   gbBckup = false;                         // Whether to use backup.
+bool   gbStartBckup = false;                    // Whether to start from backup file.
+int    g_hstepBckup = 10000;                    // How often backup file is created.
 
 // Interface variables.
-TCHAR*  g_szRegime[] = {TEXT("Bulk"), TEXT("Surface Growth"), TEXT("Shear")};
+char*  g_szRegime[] = {TEXT("Bulk"), TEXT("Surface Growth"), TEXT("Shear")};
 INT     giRegime = 2;                           // Regime of simulation, shear by default.
 
 // Materials.
-TCHAR*  g_szMaterial[] = {TEXT("Copper (Cu)"), TEXT("Silver (Ag)"), TEXT("Gold (Au)"),
+char*  g_szMaterial[] = {TEXT("Copper (Cu)"), TEXT("Silver (Ag)"), TEXT("Gold (Au)"),
                           TEXT("Nickel (Ni)"), TEXT("Aluminium (Al)"), TEXT("Lead (Pb)")};      // materials
 INT     giMaterial = 3;         // Index of a material in the array of structures, Ni default.
 
@@ -101,7 +100,7 @@ float4  *g_dcolor;          // Device array for color.
 /////////////////////////
 // Program's entry point.
 /////////////////////////
-int main(int argc, TCHAR* argv[])
+int main(int argc, char* argv[])
 {
     int deviceCount;
 
@@ -125,7 +124,7 @@ int main(int argc, TCHAR* argv[])
     //}
 
     // Read input parameters.
-    if( ReadInputFile(g_szInpFile) == 0 ) {
+    if( ReadInputFile(g_szInpFile) == false ) {
         printf(TEXT("Error with input file! Check it!\n"));
         return 1;
     }
@@ -157,9 +156,7 @@ int main(int argc, TCHAR* argv[])
 
     FreeArrays();       // Free memory and close files.
 
-    printf(TEXT("Done!\nPress any key to exit.\n"));
-
-    _getch();
+    //printf(TEXT("Done!\nPress any key to exit.\n"));
 
     return 0;
 }
@@ -408,7 +405,7 @@ int SetupJob()
     const char* errorString = InitCoordsW(g_dr, g_hr, &g_hSimParams);   // Wrapper from .cu file.
     // Check errors.
     if(errorString != 0) {
-        TCHAR szBuf[MAX_PATH] = TEXT("Exception: ");
+        char szBuf[MAX_PATH] = TEXT("Exception: ");
         lstrcat(szBuf, errorString);
         printf(TEXT("%s\n"), szBuf);
         printf(TEXT("Problems with initial coordinates! We exit!\n"));
@@ -422,7 +419,7 @@ int SetupJob()
 
     // Open file.
     if(g_bResult) {
-        TCHAR szBuf[MAX_PATH];
+        char szBuf[MAX_PATH];
         // Define file name depending on the regime.
         if(g_hSimParams.iRegime == 0)   // If bulk.
         sprintf(szBuf, TEXT("_blk_x%i_y%i_z%i_Me%i_Av%i_Pdb%i_T%3.0f"),
@@ -633,9 +630,9 @@ void InitAccels ()
 }
 
 // Read input file, returns 0 if there is some error.
-int ReadInputFile(TCHAR *szInpFile)
+bool ReadInputFile(char *szInpFile)
 {
-    TCHAR c, szBuf[MAX_PATH], szTmp[MAX_PATH];
+    char c, szBuf[MAX_PATH], szTmp[MAX_PATH];
     int iCount, iLocalCnt;
     int iRowCount;
 
@@ -643,8 +640,8 @@ int ReadInputFile(TCHAR *szInpFile)
     FILE *file = fopen(szInpFile, TEXT("r"));
     if (file == NULL)
     {
-        //std::cout << "Failed to open file " << std::string(szInpFile) << std::endl;
-        return FALSE;
+        std::cout << "Failed to open file " << std::string(szInpFile) << std::endl;
+        return false;
     }
 
     // Parse lines.
@@ -653,7 +650,7 @@ int ReadInputFile(TCHAR *szInpFile)
     while( !feof(file) )
     {
         // Read lines.
-        c = (TCHAR)fgetc(file);
+        c = (char)fgetc(file);
         if( c != TEXT('\n') ) {
             szBuf[iCount] = c;
             ++iCount;
@@ -792,5 +789,5 @@ int ReadInputFile(TCHAR *szInpFile)
 
     fclose(file);
 
-    return TRUE;
+    return true;
 }

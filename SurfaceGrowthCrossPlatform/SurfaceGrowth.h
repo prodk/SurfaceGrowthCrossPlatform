@@ -1,42 +1,37 @@
 //-------------------------------------------------------------------------------
-// SurfaceGrowth.h - contains necessary headers and prototypes of wrappers
-// from SurfaceGrowth.cu, should be included into the main file SurfaceGrowth.cpp
-// (c) 2010 Mykola Prodanov
-// (this code was written in Sumy, Ukraine)
+// SurfaceGrowth.h - headers and prototypes.
+// (c) 2010 - 2025 Mykola Prodanov
 //-------------------------------------------------------------------------------
 
 #ifndef __SURFACE_GROWTH__
 #define __SURFACE_GROWTH__
 
-#include <cuda_runtime.h>
-#include <device_launch_parameters.h>
-
-#include <cstdlib>
+// C++ library.
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
+#include <iostream>
 #include <string>
 
-///@todo: replace with C++ headers.
-#include <math.h>
-#include <time.h>
+// CUDA runtime must be declared before __CUDACC__.
+#include <cuda_runtime.h>
 
-///@todo: remove
-#include <tchar.h>
-#include <conio.h>
+#ifndef __CUDACC__
+#define __CUDACC__                   // For atomic functions.
+#endif
 
-#include <iostream>
+// CUDA.
+#include <device_atomic_functions.h> // For atomic functions.
+#include <device_launch_parameters.h>
 
 #include "math_constants.h"
 #include "vector_functions.h"
 
-#ifndef __CUDACC__
-#define __CUDACC__                  // For atomic functions.
-#endif
+// User.
+#include "ComputeDefs.h"             // For computations.
 
-#include <device_atomic_functions.h> // For atomic functions.
-
-#include "ComputeDefs.h"            // For computations.
-
-#define BLOCK_SIZE 64               // Threads per block.
+#define BLOCK_SIZE 64                // Threads per block.
 
 // For generation of random numbers.
 #define IADD   453806245
@@ -49,9 +44,6 @@
 #define TEXT(quote) quote
 #endif
 
-#define BOOL int
-#define FALSE 0
-#define TRUE 1
 #define INT int
 
 #ifndef MAX_PATH
@@ -172,10 +164,10 @@ struct SimParams
     int     bRdf;               // whether to compute rdf
     char    szRdfPath[MAX_PATH];// file path for rdf
     // back up
-    TCHAR   szBckup0[20];       // file paths for backup
-    TCHAR   szBckup1[20];       // file paths for backup
-    BOOL    bBckup;             // whether to use backup
-    BOOL    bStartBckup;        // whether to start from backup file
+    char   szBckup0[20];       // file paths for backup
+    char   szBckup1[20];       // file paths for backup
+    bool   bBckup;             // whether to use backup
+    bool   bStartBckup;        // whether to start from backup file
     int     stepBckup;          // how often to create backup file
     real    totalTime;          // duration of the simulation, in seconds
     // material
@@ -232,9 +224,9 @@ void SetColorW(float4 *g_dcolor, SimParams* g_hParams);
 // Srappers for calculations.
 const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* g_hParams);
 char* DoComputationsGLW(float4 *hr, float3 *hv, float3 *ha, float4 *dr, SimParams *hparams,
-                     FILE *fResults, TCHAR *szPdbPath);
+                     FILE *fResults, char *szPdbPath);
 char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
-                     FILE *fResults, TCHAR *szPdbPath);
+                     FILE *fResults, char *szPdbPath);
 
 }   // extern "C"
 

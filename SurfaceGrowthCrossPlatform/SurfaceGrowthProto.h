@@ -1,8 +1,6 @@
 //----------------------------------------------------------------------------
-// SurfaceGrowthProto.h - contains definition of Material array of structures,
-// function prototypes used in SurfaceGrowth.cpp and other definitions.
-// (c) 2010 Mykola Prodanov
-// (this code was written in Sumy, Ukraine)
+// SurfaceGrowthProto.h - definition of Material and other definitions/prototypes.
+// (c) 2010 - 2025 Mykola Prodanov
 //----------------------------------------------------------------------------
 
 #ifndef __SURFACE_GROWTH_PROTO__
@@ -10,7 +8,7 @@
 
 #include "SurfaceGrowth.h"      // Contains necessary CUDA and other headers and wrappers.
 
-int ReadInputFile(TCHAR *szInpFile);
+bool ReadInputFile(char *szInpFile);
 // Computational functions that are invoked on host.
 void AllocArrays ();
 void FreeArrays ();

@@ -13,3 +13,9 @@ Output is also saved in that directory:
 2) sg_...txt - measurements of different quantities.
 3) rdf_...txt - radial distribution function.
 4) sugr_...pdb - data for visualization in vmd.
+
+_______________________________________________________________________
+Note: when compiling under Linux, set proper value of the compute capability -arch in Makefile.
+The default value corresponds to compute capability 3.0 supported only by old GPUs and CUDA 10.0:
+-arch=sm_30
+CUDA 10.0 requires GCC 8.0 or older.
