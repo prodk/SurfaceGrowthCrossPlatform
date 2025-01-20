@@ -28,6 +28,19 @@ typedef unsigned short ushort;
 #define NDIM  3
 #endif
 
+///@todo: remove if not used
+struct Float3 : public float3
+{
+    Float3 operator+(const Float3& other) const
+    {
+        Float3 result;
+        result.x = x + other.x;
+        result.y = y + other.y;
+        result.z = z + other.z;
+        return result;
+    }
+};
+
 // structures
 typedef struct _VecR2
 {real x, y;}
@@ -56,7 +69,7 @@ typedef struct _Prop { //__align__(16)
 #define PropZero(v)  v.sum = v.sum2 = 0.
 #define PropAccum(v)  v.sum += v.val, v.sum2 += Sqr (v.val)
 #define PropAvg(v, n) \
-   v.sum /= n, v.sum2 = sqrt (Max (v.sum2 / n - Sqr (v.sum), 0.))
+   v.sum /= n, v.sum2 = sqrt (MaxValue (v.sum2 / n - Sqr (v.sum), 0.))
 #define PropEst(v)  v.sum, v.sum2
 
 #define AllocMem(a, n, t)  a = (t *) malloc ((n) * sizeof (t))
@@ -68,8 +81,8 @@ typedef struct _Prop { //__align__(16)
 #define IsOdd(x)   ((x) & 1)
 #define Nint(x)                                             \
    (((x) < 0.) ? (- (int) (0.5 - (x))): ((int) (0.5 + (x))))
-#define Min(x1, x2)  (((x1) < (x2)) ? (x1) : (x2))
-#define Max(x1, x2)  (((x1) > (x2)) ? (x1) : (x2))
+#define MinValue(x1, x2)  (((x1) < (x2)) ? (x1) : (x2))
+#define MaxValue(x1, x2)  (((x1) > (x2)) ? (x1) : (x2))
 #define Min3(x1, x2, x3) \
    (((x1) < (x2)) ? (((x1) < (x3)) ? (x1) : (x3)) :         \
                     (((x2) < (x3)) ? (x2) : (x3)))

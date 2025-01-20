@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
+#include <iomanip>
 #include <iostream>
 #include <string>
 
@@ -36,15 +37,13 @@
 // For generation of random numbers.
 #define IADD   453806245
 #define IMUL   314159269
-#define MASK   2147483647
+#define MASK_RAND   2147483647
 #define SCALE  0.4656612873e-9
 
 // Some definitions from windows.h
 #ifndef TEXT
 #define TEXT(quote) quote
 #endif
-
-#define INT int
 
 #ifndef MAX_PATH
 #define MAX_PATH 264
@@ -221,7 +220,7 @@ void UnmapGLBufferObjectW(uint vbo);
 void SetParametersW(SimParams *hostParams);
 void SetColorW(float4 *g_dcolor, SimParams* g_hParams);
 
-// Srappers for calculations.
+// Wrappers for calculations.
 const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* g_hParams);
 char* DoComputationsGLW(float4 *hr, float3 *hv, float3 *ha, float4 *dr, SimParams *hparams,
                      FILE *fResults, char *szPdbPath);

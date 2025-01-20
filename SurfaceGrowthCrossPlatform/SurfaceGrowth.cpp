@@ -35,12 +35,12 @@ int    g_hstepBckup = 10000;                    // How often backup file is crea
 
 // Interface variables.
 char*  g_szRegime[] = {TEXT("Bulk"), TEXT("Surface Growth"), TEXT("Shear")};
-INT     giRegime = 2;                           // Regime of simulation, shear by default.
+int     giRegime = 2;                           // Regime of simulation, shear by default.
 
 // Materials.
 char*  g_szMaterial[] = {TEXT("Copper (Cu)"), TEXT("Silver (Ag)"), TEXT("Gold (Au)"),
                           TEXT("Nickel (Ni)"), TEXT("Aluminium (Al)"), TEXT("Lead (Pb)")};      // materials
-INT     giMaterial = 3;         // Index of a material in the array of structures, Ni default.
+int    giMaterial = 3;         // Index of a material in the array of structures, Ni default.
 
 // Many globals are taken from the input file, they provide communications
 // between UI, structure g_hSimParams and device structure dparams in constant memory.
@@ -156,7 +156,7 @@ int main(int argc, char* argv[])
 
     FreeArrays();       // Free memory and close files.
 
-    //printf(TEXT("Done!\nPress any key to exit.\n"));
+    printf(TEXT("Done!\n"));
 
     return 0;
 }
@@ -388,7 +388,8 @@ int SetParams()
     g_hSimParams.countDiffuseAv = g_hcountDiffuseAv;
 
     // Set seed for random numbers, it is in params structure.
-    InitRand(0, &g_hSimParams);
+    ///@todo: change back to 0 for production runs.
+    InitRand(5, &g_hSimParams);
     // Copy parameters to the device, global variable dparams in const mem is initialized.
     SetParametersW(&g_hSimParams);          // Wrapper from .cu file.
 
@@ -549,7 +550,11 @@ void InitRand (int randSeedI, SimParams *hparams)
 {
   struct tm tv;
 
-  if (randSeedI != 0) hparams->randSeedP = randSeedI;
+  if (randSeedI != 0)
+  {
+      std::cout << "Non-random seed " << randSeedI << " is used." << std::endl;
+      hparams->randSeedP = randSeedI;
+  }
   else {
     mktime (&tv);
     hparams->randSeedP = tv.tm_sec;
@@ -572,7 +577,7 @@ void InitRand (int randSeedI, SimParams *hparams)
 
 real RandR (SimParams *hparams)
 {
-  hparams->randSeedP = (hparams->randSeedP * IMUL + IADD) & MASK;
+  hparams->randSeedP = (hparams->randSeedP * IMUL + IADD) & MASK_RAND;
   return (hparams->randSeedP * SCALE);
 }
 
