@@ -6,7 +6,12 @@
 //-------------------------------------------------------------
 #include "SurfaceGrowth.h"          // Cuda headers and prototypes.
 
+//#include <cub/util_allocator.cuh>
+//#include <cub/device/device_reduce.cuh>
+
 cudaDeviceProp gDeviceProp;         // Device properties.
+
+//cub::CachingDeviceAllocator g_allocator(false);
 
 // Globals for computing, prefix h - host variable, no prefix or d - device variable.
 __device__ __constant__ SimParams dparams;      // Global device variable in constant memory for GPU.
@@ -598,7 +603,7 @@ __global__ void BinAtomsIntoCellsK(float4 *dr, int *CELL, uint *molsInCells)
         VMul (cc, rShifted, dparams.invWidth);  // invWidth is placed in params to avoid division each time
         c = VLinear (cc, dparams.cells);        // Convert index of the cell into 1D.
 
-        if( c == blockIdx.x )   // If the particel is in the desired cell.
+        if( c == blockIdx.x )   // If the particle is in the desired cell.
         {
             whereToWrite = atomicAdd(&molsInCells[c], 1);   // Find shift in the array.
             CELL[ c * blockDim.x + whereToWrite ] = n;      // Save particle index.
@@ -2018,9 +2023,9 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         AllocMem(hHistRdf, hparams->sizeHistRdf, uint);
 
     // Host variables for diffusion.
-    int nb;
-    TBuf *tBuf;
-    real *rrDiffuseAv;
+    int nb = 0;
+    TBuf *tBuf = nullptr;
+    real *rrDiffuseAv = nullptr;
     FILE *fileDiffuse = NULL;
     if(hparams->iRegime == 2)   // If shear, then measure diffusion.
     {
@@ -2082,7 +2087,13 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 // Begin memory allocation.
     cudaMalloc(&dr, hparams->nMol * sizeof(float4));
     // Also allocate memory for velocities and accelerations.
+
     cudaMalloc(&dv, hparams->nMol * sizeof(float3));
+
+    // CUB
+    //Float3 * dvCub = nullptr;
+    //CubDebugExit(g_allocator.DeviceAllocate((void**)&dvCub, hparams->nMol * sizeof(Float3)));
+
     cudaMalloc(&da, hparams->nMol * sizeof(float3));
 
     // Helper array for computing system properties, total impulse, energy, etc.
@@ -2117,6 +2128,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         lstrcat(szPdbPath, errorString);
         return szPdbPath;
     }
+
 // End memory allocation.
 
     // Copy data from host to device.
@@ -2142,7 +2154,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         cudaEventRecord(start, 0);  // Record start time.
         cudaEventRecord(totalStart, 0);
 
-        ++ hparams->stepCount;  // Increment step count.
+        ++hparams->stepCount;  // Increment step count.
 
 // Code for insertion of atoms (for surface growth regime).
     // Before equilibration atoms are not deposited.
@@ -2199,7 +2211,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             cudaMemset(NN, 0, hparams->nMol * sizeof(int));
             // Fill neighbor list with -1.
             cudaMemset(NBL, -1, hparams->nMol * hparams->iNebrMax * sizeof(int));
-            // Fill number of atoms in each cell by 0.
+            // Fill number of atoms in each cell with 0.
             cudaMemset(molsInCells, 0, VProd(hparams->cells) * sizeof(uint));
             // Define cells of atoms.
             BinAtomsIntoCellsK<<< dimGrid, dimBlock >>> (dr, CELL, molsInCells);
@@ -2341,6 +2353,68 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             >>>(dv, hlpArray);
         // Copy total impulse on host.
         cudaMemcpy(&vSum, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost);
+
+        /// @todo: debug code start
+
+        // 1) copy the metal atoms to host
+        cudaMemcpy(hv, dv, hparams->nMol * sizeof(float3), cudaMemcpyDeviceToHost);
+
+        // 2) zero total impulse
+        float3 hvSum;
+        VZero(hvSum);
+
+        // 3) sum up metal atoms
+        for (int idx = 0; idx < hparams->nMol; ++idx)
+            VVAdd(hvSum, hv[idx]);
+
+        // 4) scale the impulse with the total metal mass
+        const auto totalMeMass = hparams->massMe * hparams->nMolMe;
+        VScale(hvSum, totalMeMass);
+        // Average by the total number of atoms.
+        const auto nMolInv = 1. / hparams->nMol;
+        VScale(hvSum, nMolInv);
+
+        // @todo: repeat the same for non-Me atoms: copy to device, sum, NO scaling needed by mass
+
+
+        /// CUB start.
+        // Copy velocities from host to device. Device-to-device (dv->dvCub) did not work.
+        //cudaMemcpy(dvCub, hv, hparams->nMol * sizeof(Float3), cudaMemcpyHostToDevice);
+        // CUB vSum Allocate device output array
+        /*Float3 *d_out = NULL;
+        CubDebugExit(g_allocator.DeviceAllocate((void**)&d_out, sizeof(Float3) * 1));*/
+
+        // CUB vSum Request and allocate temporary storage
+        //void            *d_temp_storage = NULL;
+        //size_t          temp_storage_bytes = 0;
+        //CubDebugExit(cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, dvCub, d_out, hparams->nMol));
+        //CubDebugExit(g_allocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
+
+        //// Run
+        //CubDebugExit(cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, dvCub, d_out, hparams->nMol));
+
+        //if (d_out) CubDebugExit(g_allocator.DeviceFree(d_out));
+        //if (d_temp_storage) CubDebugExit(g_allocator.DeviceFree(d_temp_storage));
+
+        //// Copy the result
+        //Float3 hvSumCub;
+        //VZero(hvSumCub);
+        //cudaMemcpy(&hvSumCub, d_out, sizeof(Float3), cudaMemcpyDeviceToHost);
+
+        //VScale(hvSumCub, totalMeMass);
+        //// Average by the total number of atoms.
+        //VScale(hvSumCub, nMolInv);
+
+        /// CUB end.
+
+        // Output
+        std::cout << std::fixed << std::setprecision(8)
+            << "k=" << vSum.x << " " << vSum.y << " " << vSum.z
+            << ", h=" << hvSum.x << " " << hvSum.y << " " << hvSum.z
+            //<< ", cub= " << hvSumCub.x << " " << hvSumCub.y << " " << hvSumCub.z
+            << ", step =" << hparams->stepCount << std::endl;
+        /// @todo: debug end
+
 
         // Find maximum of squares of velocities.
         ComputeVvMaxK<<< grid,                      // Number of blocks <= 1024.
@@ -2499,7 +2573,15 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 
     // Cleanup.
     cudaFree(dr);
+
     cudaFree(dv);
+
+    //if (dvCub) CubDebugExit(g_allocator.DeviceFree(dvCub));
+
+    // CUB
+   /* if (d_out) CubDebugExit(g_allocator.DeviceFree(d_out));
+    if (d_temp_storage) CubDebugExit(g_allocator.DeviceFree(d_temp_storage));*/
+
     cudaFree(da);
     cudaFree(hlpArray);
     cudaFree(rho);
