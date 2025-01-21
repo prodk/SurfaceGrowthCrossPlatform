@@ -33,7 +33,7 @@
 // User.
 #include "ComputeDefs.h"             // For computations.
 
-#define BLOCK_SIZE 64                // Threads per block.
+#define BLOCK_SIZE 64                // Threads per block for non-reduction algorithms.
 
 // For generation of random numbers.
 #define IADD   453806245

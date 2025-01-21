@@ -115,6 +115,8 @@ int main(int argc, char* argv[])
     // Get cuda device properties.
     cudaGetDeviceProperties(&g_hDeviceProp, 0);
 
+    std::cout << "Max threads per block=" << g_hDeviceProp.maxThreadsPerBlock << std::endl;
+
     // Check compute capability, if less than 1.2 then exit.
     //if( (g_hDeviceProp.major < 1) ||
     //  ( (g_hDeviceProp.major == 1) && (g_hDeviceProp.minor < 2) ) )
@@ -615,6 +617,11 @@ void InitVels ()
           VScale (g_hv[n], g_hSimParams.velMag);
           VVAdd (g_hvSum, g_hv[n]);
       }
+      ///@todo: remove debug
+      /*g_hv[n].x = 1.;
+      g_hv[n].y = 0.5;
+      g_hv[n].z = 2.;
+      VVAdd(g_hvSum, g_hv[n]);*/
   }
   // Shift velocities to provide zero total impulse.
   for(n = 0; n < g_hSimParams.nMol; n++) {

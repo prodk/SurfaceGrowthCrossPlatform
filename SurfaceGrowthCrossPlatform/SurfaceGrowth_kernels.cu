@@ -6,12 +6,7 @@
 //-------------------------------------------------------------
 #include "SurfaceGrowth.h"          // Cuda headers and prototypes.
 
-//#include <cub/util_allocator.cuh>
-//#include <cub/device/device_reduce.cuh>
-
 cudaDeviceProp gDeviceProp;         // Device properties.
-
-//cub::CachingDeviceAllocator g_allocator(false);
 
 // Globals for computing, prefix h - host variable, no prefix or d - device variable.
 __device__ __constant__ SimParams dparams;      // Global device variable in constant memory for GPU.
@@ -1122,6 +1117,7 @@ __global__ void ComputeVSumK( float3 *dv,   // Array of velocities.
     partialSum[blockDim.x+t] = dv[(2*blockIdx.x + 1)*blockDim.x + t];
 
     // If metal scale by mass.
+    ///@todo: scale all the components, not just x!
     float m = dparams.massMe;
     // Here not threadIdx, but index of molecule!
     if( (2*blockIdx.x*blockDim.x + t) < dparams.nMolMe )
@@ -1241,6 +1237,7 @@ __global__ void ComputeVvSumK( float3 *dv,  // array of velocities
     partialSum[t].x = VLenSq (partialSum[t]);
     partialSum[blockDim.x + t].x = VLenSq (partialSum[blockDim.x + t]);
 
+    ///@todo: scale all the 3 components with m!
     // If metal scale by mass.
     float m = dparams.massMe;
     // Here not threadIdx, but index of molecule!
@@ -2058,12 +2055,22 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 
     uint    *histRdf = 0;   // Histogram for rdf.
 
-    // Number of blocks for summing and the size of the array hlpArray;
-    // each block contains 512 threads and processes 1024 elements;
+    // Number of blocks for summing (reduction) and the size of the array hlpArray;
+    // each block contains maxThreadsPerBlock threads and processes 2*maxThreadsPerBlock elements;
     // because the last block computes total sum of grid elements,
-    // so grid could not be greater than 1024, and hence nMol <= 1024 * 1024 = 1048576.
-    uint grid = (uint) ceil((float)hparams->nMol / (1024) );
-    uint block = 512;       // Threads per block for summation.
+    // so grid could not be greater than 2*maxThreadsPerBlock, and hence
+    // nMol <= 2*maxThreadsPerBlock * 2*maxThreadsPerBlock.
+    // For maxThreadsPerBlock = 512, nMol <= 1024 * 1024 = 1048576.
+    // For maxThreadsPerBlock = 1024, nMol <= 2048 * 2048 = 4194304.
+
+    constexpr uint maxThreadsPerBlock = 1024; /// @todo: change to 1024
+    constexpr uint maxBlockCount = 2 * maxThreadsPerBlock; /// @todo: for maxThreadsPerBlock use 2048
+    uint grid = (uint) ceil((float)hparams->nMol / maxBlockCount);
+    uint block = maxThreadsPerBlock;       // Threads per block for summation.
+
+    std::cout << "maxThreadsPerBlock=" << maxThreadsPerBlock
+        << ", maxBlockCount=" << maxBlockCount
+        << ", grid=" << grid << ", block=" << block << std::endl;
 
     dim3 dimBlock(hparams->blockSize, 1, 1);    // Number of threads.
     // Define number of blocks as in Anderson.
@@ -2089,10 +2096,6 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
     // Also allocate memory for velocities and accelerations.
 
     cudaMalloc(&dv, hparams->nMol * sizeof(float3));
-
-    // CUB
-    //Float3 * dvCub = nullptr;
-    //CubDebugExit(g_allocator.DeviceAllocate((void**)&dvCub, hparams->nMol * sizeof(Float3)));
 
     cudaMalloc(&da, hparams->nMol * sizeof(float3));
 
@@ -2263,6 +2266,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 
         LeapfrogStepK<<< dimGrid, dimBlock >>> ( 2, dr, dv, da );
 
+        //frictForce.x = 0.f; ///@todo: remove
+
 // Kernels, that form EvalProps - evaluate properties,
 // begin compute tribological properties.
         if(hparams->nMolMe != 0)            // Avoid bad values without metal atoms.
@@ -2356,63 +2361,32 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 
         /// @todo: debug code start
 
-        // 1) copy the metal atoms to host
-        cudaMemcpy(hv, dv, hparams->nMol * sizeof(float3), cudaMemcpyDeviceToHost);
+        //// 1) copy the metal atoms to host
+        //cudaMemcpy(hv, dv, hparams->nMol * sizeof(float3), cudaMemcpyDeviceToHost);
 
-        // 2) zero total impulse
-        float3 hvSum;
-        VZero(hvSum);
+        //// 2) zero total impulse
+        //float3 hvSum;
+        //VZero(hvSum);
 
-        // 3) sum up metal atoms
-        for (int idx = 0; idx < hparams->nMol; ++idx)
-            VVAdd(hvSum, hv[idx]);
+        //// 3) sum up metal atoms
+        //for (int idx = 0; idx < hparams->nMol; ++idx)
+        //    VVAdd(hvSum, hv[idx]);
 
         // 4) scale the impulse with the total metal mass
-        const auto totalMeMass = hparams->massMe * hparams->nMolMe;
-        VScale(hvSum, totalMeMass);
+        //const auto totalMeMass = hparams->massMe;// *hparams->nMolMe;
+        //VScale(hvSum, totalMeMass);
         // Average by the total number of atoms.
-        const auto nMolInv = 1. / hparams->nMol;
-        VScale(hvSum, nMolInv);
+        /*const auto nMolInv = 1. / hparams->nMol;
+        VScale(hvSum, nMolInv);*/
 
         // @todo: repeat the same for non-Me atoms: copy to device, sum, NO scaling needed by mass
 
-
-        /// CUB start.
-        // Copy velocities from host to device. Device-to-device (dv->dvCub) did not work.
-        //cudaMemcpy(dvCub, hv, hparams->nMol * sizeof(Float3), cudaMemcpyHostToDevice);
-        // CUB vSum Allocate device output array
-        /*Float3 *d_out = NULL;
-        CubDebugExit(g_allocator.DeviceAllocate((void**)&d_out, sizeof(Float3) * 1));*/
-
-        // CUB vSum Request and allocate temporary storage
-        //void            *d_temp_storage = NULL;
-        //size_t          temp_storage_bytes = 0;
-        //CubDebugExit(cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, dvCub, d_out, hparams->nMol));
-        //CubDebugExit(g_allocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
-
-        //// Run
-        //CubDebugExit(cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, dvCub, d_out, hparams->nMol));
-
-        //if (d_out) CubDebugExit(g_allocator.DeviceFree(d_out));
-        //if (d_temp_storage) CubDebugExit(g_allocator.DeviceFree(d_temp_storage));
-
-        //// Copy the result
-        //Float3 hvSumCub;
-        //VZero(hvSumCub);
-        //cudaMemcpy(&hvSumCub, d_out, sizeof(Float3), cudaMemcpyDeviceToHost);
-
-        //VScale(hvSumCub, totalMeMass);
-        //// Average by the total number of atoms.
-        //VScale(hvSumCub, nMolInv);
-
-        /// CUB end.
-
         // Output
-        std::cout << std::fixed << std::setprecision(8)
-            << "k=" << vSum.x << " " << vSum.y << " " << vSum.z
-            << ", h=" << hvSum.x << " " << hvSum.y << " " << hvSum.z
-            //<< ", cub= " << hvSumCub.x << " " << hvSumCub.y << " " << hvSumCub.z
-            << ", step =" << hparams->stepCount << std::endl;
+        //std::cout << std::fixed << std::setprecision(8)
+        //    << "k=" << vSum.x << " " << vSum.y << " " << vSum.z
+        //    << ", h=" << hvSum.x << " " << hvSum.y << " " << hvSum.z
+        //    //<< ", cub= " << hvSumCub.x << " " << hvSumCub.y << " " << hvSumCub.z
+        //    << ", step =" << hparams->stepCount << std::endl;
         /// @todo: debug end
 
 
@@ -2575,12 +2549,6 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
     cudaFree(dr);
 
     cudaFree(dv);
-
-    //if (dvCub) CubDebugExit(g_allocator.DeviceFree(dvCub));
-
-    // CUB
-   /* if (d_out) CubDebugExit(g_allocator.DeviceFree(d_out));
-    if (d_temp_storage) CubDebugExit(g_allocator.DeviceFree(d_temp_storage));*/
 
     cudaFree(da);
     cudaFree(hlpArray);
