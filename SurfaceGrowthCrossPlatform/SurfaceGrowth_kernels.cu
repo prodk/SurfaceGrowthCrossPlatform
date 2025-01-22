@@ -17,6 +17,30 @@ __shared__  bool isLastBlockDone;   // For sum, from Programming guide, p. 111.
 __shared__  int K[BLOCK_SIZE];      // BLOCK_SIZE is defined in SurfaceGrowth.h
 __shared__  float4 B[BLOCK_SIZE];
 
+namespace
+{
+    bool isCudaError(const std::string& errorMessage, char *outMessage)
+    {
+        const auto error = cudaGetLastError();
+        if (error == cudaSuccess)
+        {
+            return false;
+        }
+
+        cudaThreadExit();
+
+        const auto errorString = cudaGetErrorString(error);
+        const std::string finalMessage = errorMessage + std::string(errorString);
+
+        std::cout << finalMessage << std::endl;
+
+        lstrcpy(outMessage, finalMessage.c_str());
+
+        return true;
+    }
+
+} // Anonymous namespace
+
 //////////////////////////////////////////////////////////
 // Prototypes of some host functions called from wrappers.
 //////////////////////////////////////////////////////////
@@ -2085,9 +2109,6 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 
     int iBckup = 1;     // For choosing of the backup file.
 
-    // For error handling.
-    cudaError_t error;
-
     float hTime, hTimeTotal;    // Time of one time step and of the complete run.
     cudaEvent_t start, stop, totalStart, totalStop;
 
@@ -2123,12 +2144,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         cudaMalloc(&histRdf, hparams->sizeHistRdf * sizeof(int));
 
     // Check errors.
-    error = cudaGetLastError();
-    if( error != cudaSuccess) {
-        cudaThreadExit();
-        const char* errorString = cudaGetErrorString (error);
-        lstrcpy(szPdbPath, "Problems with memory allocation! Exception: ");
-        lstrcat(szPdbPath, errorString);
+    if (isCudaError("Problems with memory allocation! Exception: ", szPdbPath))
+    {
         return szPdbPath;
     }
 
@@ -2180,13 +2197,9 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             hparams->nMolDeposited += nMolToDeposit;
         }
     }
-    // Check errors .
-    error = cudaGetLastError();
-    if( error != cudaSuccess) {
-        cudaThreadExit();
-        const char* errorString = cudaGetErrorString (error);
-        lstrcpy(szPdbPath, "Problems with insertion of atoms! Exception: ");
-        lstrcat(szPdbPath, errorString);
+    // Check errors.
+    if (isCudaError("Problems with insertion of atoms! Exception: ", szPdbPath))
+    {
         return szPdbPath;
     }
 // End code for insertion of atoms.
@@ -2195,12 +2208,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         ApplyBoundaryCondK<<< dimGrid, dimBlock >>> ( dr );
 
         // Check errors.
-        error = cudaGetLastError();
-        if( error != cudaSuccess) {
-            cudaThreadExit();
-            const char* errorString = cudaGetErrorString (error);
-            lstrcpy(szPdbPath, "Problems with the 1st part of Verlet! Exception: ");
-            lstrcat(szPdbPath, errorString);
+        if (isCudaError("Problems with Verlet part 1! Exception: ", szPdbPath))
+        {
             return szPdbPath;
         }
 
@@ -2218,24 +2227,17 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             cudaMemset(molsInCells, 0, VProd(hparams->cells) * sizeof(uint));
             // Define cells of atoms.
             BinAtomsIntoCellsK<<< dimGrid, dimBlock >>> (dr, CELL, molsInCells);
+
             // Check errors.
-            error = cudaGetLastError();
-            if( error != cudaSuccess) {
-                cudaThreadExit();
-                const char* errorString = cudaGetErrorString (error);
-                lstrcpy(szPdbPath, "Problems with building of cells! Exception: ");
-                lstrcat(szPdbPath, errorString);
+            if (isCudaError("Problems with buildings cells! Exception: ", szPdbPath))
+            {
                 return szPdbPath;
             }
 
             BuildNebrListK<<< dimGrid, dimBlock >>> (dr, CELL, NN, NBL);
             // Check errors.
-            error = cudaGetLastError();
-            if( error != cudaSuccess) {
-                cudaThreadExit();
-                const char* errorString = cudaGetErrorString (error);
-                lstrcpy(szPdbPath, "Problems with building of neigbor list! Exception: ");
-                lstrcat(szPdbPath, errorString);
+            if (isCudaError("Problems with building neighbor list! Exception: ", szPdbPath))
+            {
                 return szPdbPath;
             }
         }
@@ -2244,12 +2246,10 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 
         // Compute and save in the dcarbonForce forces acting from C on Me.
         ComputeForcesK<<< dimGrid, dimBlock >>> (da, dr, NN, NBL, rho, dcarbonForce);
+
         // Check errors.
-        if( error != cudaSuccess) {
-            cudaThreadExit();
-            const char* errorString = cudaGetErrorString (error);
-            lstrcpy(szPdbPath, "Problems with foce evaluation! Exception: ");
-            lstrcat(szPdbPath, errorString);
+        if (isCudaError("Problems with force evaluatin! Exception: ", szPdbPath))
+        {
             return szPdbPath;
         }
 
@@ -2309,12 +2309,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             particleSize.z = particleSize.z - particleSizeMin.z;
 
             // Check errors.
-            error = cudaGetLastError();
-            if( error != cudaSuccess) {
-                cudaThreadExit();
-                const char* errorString = cudaGetErrorString (error);
-                lstrcpy(szPdbPath, "Problems with tribological properties! Exception: ");
-                lstrcat(szPdbPath, errorString);
+            if (isCudaError("Problems with tribological properties! Exception: ", szPdbPath))
+            {
                 return szPdbPath;
             }
 
@@ -2423,13 +2419,10 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         ComputePotEnergyK<<< grid, block, 2*block*sizeof(float3) >>>(dr, hlpArray);
         // Copy potential energy on host.
         cudaMemcpy(&uSum, &hlpArray[0].x, sizeof(float), cudaMemcpyDeviceToHost);
+
         // Check errors.
-        error = cudaGetLastError();
-        if( error != cudaSuccess) {
-            cudaThreadExit();
-            const char* errorString = cudaGetErrorString (error);
-            lstrcpy(szPdbPath, "Problems with evaluation of properties! Exception: ");
-            lstrcat(szPdbPath, errorString);
+        if (isCudaError("Problems with evaluation of properties! Exception: ", szPdbPath))
+        {
             return szPdbPath;
         }
 
@@ -2645,16 +2638,16 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
             cudaMemcpy(hr, dr, hparams->nMolMe*sizeof(float4), cudaMemcpyDeviceToHost);
         }
     }
+
     cudaFree(dr);
-    // Check errors.
-    cudaError_t error;
-    error = cudaGetLastError();
-    if( error != cudaSuccess)
+
+    char* errorString = 0;
+    if (isCudaError("InitCoordsW failed: ", errorString))
     {
-        const char* errorString = cudaGetErrorString (error);
         return errorString;
     }
-    else return 0;
+
+    return 0;
 }
 
 //////////////////////////

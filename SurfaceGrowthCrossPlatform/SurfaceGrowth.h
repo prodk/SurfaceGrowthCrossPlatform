@@ -223,8 +223,7 @@ void SetColorW(float4 *g_dcolor, SimParams* g_hParams);
 
 // Wrappers for calculations.
 const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* g_hParams);
-char* DoComputationsGLW(float4 *hr, float3 *hv, float3 *ha, float4 *dr, SimParams *hparams,
-                     FILE *fResults, char *szPdbPath);
+
 char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
                      FILE *fResults, char *szPdbPath);
 
