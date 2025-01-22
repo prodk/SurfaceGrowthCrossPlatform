@@ -35,7 +35,7 @@ int    g_hstepBckup = 10000;                    // How often backup file is crea
 
 // Interface variables.
 char*  g_szRegime[] = {TEXT("Bulk"), TEXT("Surface Growth"), TEXT("Shear")};
-int     giRegime = 2;                           // Regime of simulation, shear by default.
+int    giRegime = 2;                            // Regime of simulation, shear by default.
 
 // Materials.
 char*  g_szMaterial[] = {TEXT("Copper (Cu)"), TEXT("Silver (Ag)"), TEXT("Gold (Au)"),
@@ -45,7 +45,7 @@ int    giMaterial = 3;         // Index of a material in the array of structures
 // Many globals are taken from the input file, they provide communications
 // between UI, structure g_hSimParams and device structure dparams in constant memory.
 // Compute variables, "g_h" prefix - global on host.
-real    g_hvelMag;                  // Magnitude of initial velocity, is defined in SetParams.
+real    g_hvelMag = 0.f;            // Magnitude of initial velocity, is defined in SetParams.
 real    g_hrNebrShell = 0.4f;       // Distance to add to the cutoff for neighbors.
 int     g_hiNebrMax = 2*BLOCK_SIZE; // Maximum number of neighbors.
 int     g_hBlockSize = BLOCK_SIZE;  // Is used in shared memory arrays.
@@ -89,20 +89,20 @@ int g_hlimitDiffuseAv = 20;
 int g_hcountDiffuseAv = 0;
 
 // Host variables.
-float3  g_hvSum;            // Total impulse.
-SimParams g_hSimParams;     // Is used for communication between UI and wrappers (and kernels).
-float4  *g_hr;              // Host array for positions, note float4.
-float3  *g_hv, *g_ha;       // Host arrays for velocities and forces of molecules.
+float3  g_hvSum;                           // Total impulse.
+SimParams g_hSimParams;                    // Is used for communication between UI and wrappers (and kernels).
+float4  *g_hr = nullptr;                   // Host array for positions, note float4.
+float3  *g_hv = nullptr, *g_ha = nullptr;  // Host arrays for velocities and forces of molecules.
 // Device variables.
-float4  *g_dr;              // Device array for positions.
-float4  *g_dcolor;          // Device array for color.
+float4  *g_dr = nullptr;                   // Device array for positions.
+float4  *g_dcolor = nullptr;               // Device array for color.
 
 /////////////////////////
 // Program's entry point.
 /////////////////////////
 int main(int argc, char* argv[])
 {
-    int deviceCount;
+    int deviceCount = 0;
 
     // Exit if there are no CUDA capable devices.
     cudaGetDeviceCount(&deviceCount);
@@ -111,28 +111,37 @@ int main(int argc, char* argv[])
         return 1;   // Exit the application.
     }
 
-    ///@todo: reconsider the below code: use newer CUDA API.
+    // Initialize cuda.
+    CudaInitW(argc, (char**)&g_szCmdLine);
+
     // Get cuda device properties.
     cudaGetDeviceProperties(&g_hDeviceProp, 0);
 
-    std::cout << "Max threads per block=" << g_hDeviceProp.maxThreadsPerBlock << std::endl;
+    std::cout << std::endl;
+    std::cout << "GPU parameters:" << std::endl;
+    std::cout << "GPU name =" << std::string(g_hDeviceProp.name) << std::endl;
+    std::cout << "GPU id = " << std::string(g_hDeviceProp.uuid.bytes) << std::endl;
+    std::cout << "Compute capability = " << g_hDeviceProp.major << "." << g_hDeviceProp.minor << std::endl;
+    std::cout << "Max threads per block = " << g_hDeviceProp.maxThreadsPerBlock << std::endl;
+    std::cout << "Total global memory = " << g_hDeviceProp.totalGlobalMem <<
+                 ", Total constant memroy = " << g_hDeviceProp.totalConstMem <<
+                 ", Memory bus width = " << g_hDeviceProp.memoryBusWidth << std::endl;
+    std::cout << std::endl;
 
     // Check compute capability, if less than 1.2 then exit.
-    //if( (g_hDeviceProp.major < 1) ||
-    //  ( (g_hDeviceProp.major == 1) && (g_hDeviceProp.minor < 2) ) )
-    //{
-    //  printf(TEXT("Compute capability of your device is less than 1.2!"));
-    //  return 1;                       // Exit the application.
-    //}
+    if ( (g_hDeviceProp.major < 1) ||
+       ( (g_hDeviceProp.major == 1) && (g_hDeviceProp.minor < 2) ) )
+    {
+      printf(TEXT("Compute capability of your device is less than 1.2!"));
+      return 1;                       // Exit the application.
+    }
 
     // Read input parameters.
-    if( ReadInputFile(g_szInpFile) == false ) {
+    if (ReadInputFile(g_szInpFile) == false) {
         printf(TEXT("Error with input file! Check it!\n"));
         return 1;
     }
 
-    // Initialize cuda.
-    CudaInitW(argc, (char**)&g_szCmdLine);
     // Set host parameters and check system size.
     if (!SetParams()){
         printf(TEXT("The system is too large (grid = %i blocks)!\n"), g_hSimParams.gridSize);
@@ -140,18 +149,20 @@ int main(int argc, char* argv[])
         return 1;   // Exit the application.
     }
 
+    PrintParams();
+
     // Make preliminary work.
-    if( !SetupJob()){
+    if (!SetupJob()){
         printf(TEXT("Problems with SetupJob!\n"));
         return 1; // If error with initial coordinates then exit.
     }
 
     // Begin computations.
-    printf(TEXT("Performing computations. Wait...\n"));
-    char* errorString =
+    printf(TEXT("\nPerforming computations. Wait...\n"));
+    const char* errorString =
         DoComputationsW(g_hr, g_hv, g_ha, &g_hSimParams, g_fResult, g_szPdb);
 
-    if(errorString != 0) {
+    if (errorString != 0) {
         printf(TEXT("Problems with DoComputationsW! We exit!\n"));
         return 1;
     }
@@ -176,14 +187,14 @@ void AllocArrays () // Allocate host memory.
 
 void FreeArrays ()  // Free global memory on host and close files.
 {
-    if(g_hr)
+    if (g_hr)
         free(g_hr);
-    if(g_hv)
+    if (g_hv)
         free(g_hv);
-    if(g_ha)
+    if (g_ha)
         free(g_ha);
 
-    if(g_fResult)
+    if (g_fResult)
         fclose(g_fResult);
 }
 
@@ -398,6 +409,19 @@ int SetParams()
     return 1;       // All right.
 }
 
+void PrintParams()
+{
+    std::cout << std::endl;
+    std::cout << "Input parameters:" << std::endl;
+    std::cout << "Regime = " << g_hSimParams.iRegime << std::endl;
+    std::cout << "X cells = " << g_hSimParams.initUcell.x << std::endl;
+    std::cout << "Y cells = " << g_hSimParams.initUcell.y << std::endl;
+    std::cout << "Z cells = " << g_hSimParams.initUcell.z << std::endl;
+    std::cout << "Material = " << g_hSimParams.iMaterial << std::endl;
+    std::cout << "Total atoms = " << g_hSimParams.nMol << std::endl;
+    std::cout << "Metal atoms = " << g_hSimParams.nMolMe << std::endl;
+}
+
 // Make preliminary work.
 int SetupJob()
 {
@@ -550,103 +574,90 @@ void GrapheneInit()
 // Code for generation of random numbers (from Rapaport).
 void InitRand (int randSeedI, SimParams *hparams)
 {
-  struct tm tv;
+    struct tm tv;
 
-  if (randSeedI != 0)
-  {
-      std::cout << "Non-random seed " << randSeedI << " is used." << std::endl;
-      hparams->randSeedP = randSeedI;
-  }
-  else {
-    mktime (&tv);
-    hparams->randSeedP = tv.tm_sec;
-  }
+    if (randSeedI != 0)
+    {
+        std::cout << "Non-random seed " << randSeedI << " is used." << std::endl;
+        hparams->randSeedP = randSeedI;
+    }
+    else {
+        mktime (&tv);
+        hparams->randSeedP = tv.tm_sec;
+    }
 }
-
-//On linux use this version and header #include <sys/time.h>:
-/*
-void InitRand (int randSeedI, SimParams *hparams)
-{
-  struct timeval tv;
-
-  if (randSeedI != 0) hparams->randSeedPrandSeedP = randSeedI;
-  else {
-    gettimeofday (&tv, 0);
-    hparams->randSeedP = tv.tv_usec;
-  }
-}
-*/
 
 real RandR (SimParams *hparams)
 {
-  hparams->randSeedP = (hparams->randSeedP * IMUL + IADD) & MASK_RAND;
-  return (hparams->randSeedP * SCALE);
+    hparams->randSeedP = (hparams->randSeedP * IMUL + IADD) & MASK_RAND;
+    return (hparams->randSeedP * SCALE);
 }
 
 void VRand (float3 *p, SimParams *hparams)
 {
-  real s, x, y;
+    real s = 0.;
+    real x = 0.;
+    real y = 0.;
 
-  s = 2.;
-  while (s > 1.) {
-    x = 2. * RandR (hparams) - 1.;
-    y = 2. * RandR (hparams) - 1.;
-    s = Sqr (x) + Sqr (y);
-  }
-  p->z = 1. - 2. * s;
-  s = 2. * sqrt (1. - s);
-  p->x = s * x;
-  p->y = s * y;
+    s = 2.;
+    while (s > 1.) {
+        x = 2. * RandR (hparams) - 1.;
+        y = 2. * RandR (hparams) - 1.;
+        s = Sqr (x) + Sqr (y);
+    }
+    p->z = 1. - 2. * s;
+    s = 2. * sqrt (1. - s);
+    p->x = s * x;
+    p->y = s * y;
 }
 
 // Initialize velocities.
 void InitVels ()
 {
-  int n;
+    int n = 0;
 
-  VZero (g_hvSum);
-  for(n = 0; n < g_hSimParams.nMol; n++) {
-      // For surface growth and shear, metal atoms have zero initial velocity.
-      if( (g_hSimParams.iRegime != 0) && (n < g_hSimParams.nMolMe) ) {// For metal.
-          g_hv[n].x = 0.;
-          g_hv[n].y = 0.;
-          g_hv[n].z = 0.;
-      }
-      else {// Carbon atoms.
-          VRand (&g_hv[n], &g_hSimParams);
-          VScale (g_hv[n], g_hSimParams.velMag);
-          VVAdd (g_hvSum, g_hv[n]);
-      }
-      ///@todo: remove debug
-      /*g_hv[n].x = 1.;
-      g_hv[n].y = 0.5;
-      g_hv[n].z = 2.;
-      VVAdd(g_hvSum, g_hv[n]);*/
-  }
-  // Shift velocities to provide zero total impulse.
-  for(n = 0; n < g_hSimParams.nMol; n++) {
-     if( g_hSimParams.iRegime == 0)
-         VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol), g_hvSum);
-     else if(n >= g_hSimParams.nMolMe)
-         VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol /*- g_hSimParams.nMolMe*/), g_hvSum);
-  }
+    VZero (g_hvSum);
+    for(n = 0; n < g_hSimParams.nMol; n++) {
+        // For surface growth and shear, metal atoms have zero initial velocity.
+        if( (g_hSimParams.iRegime != 0) && (n < g_hSimParams.nMolMe) ) {// For metal.
+            g_hv[n].x = 0.;
+            g_hv[n].y = 0.;
+            g_hv[n].z = 0.;
+        }
+        else {// Carbon atoms.
+            VRand (&g_hv[n], &g_hSimParams);
+            VScale (g_hv[n], g_hSimParams.velMag);
+            VVAdd (g_hvSum, g_hv[n]);
+        }
+        ///@todo: remove debug
+        /*g_hv[n].x = 1.;
+        g_hv[n].y = 0.5;
+        g_hv[n].z = 2.;
+        VVAdd(g_hvSum, g_hv[n]);*/
+    }
+    // Shift velocities to provide zero total impulse.
+    for(n = 0; n < g_hSimParams.nMol; n++) {
+        if( g_hSimParams.iRegime == 0)
+            VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol), g_hvSum);
+        else if(n >= g_hSimParams.nMolMe)
+            VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol /*- g_hSimParams.nMolMe*/), g_hvSum);
+    }
 }
 
 // Initialize accelerations.
 void InitAccels ()
 {
-  int n;
-
-  for(n = 0; n < g_hSimParams.nMol; n++)
-      VZero (g_ha[n]);
+    for(int n = 0; n < g_hSimParams.nMol; n++)
+        VZero (g_ha[n]);
 }
 
 // Read input file, returns 0 if there is some error.
 bool ReadInputFile(char *szInpFile)
 {
-    char c, szBuf[MAX_PATH], szTmp[MAX_PATH];
-    int iCount, iLocalCnt;
-    int iRowCount;
+    char c = 0, szBuf[MAX_PATH], szTmp[MAX_PATH];
+    int iCount = 0;
+    int iLocalCnt = 0;
+    int iRowCount = 0;
 
     // Open files.
     FILE *file = fopen(szInpFile, TEXT("r"));
@@ -704,8 +715,6 @@ bool ReadInputFile(char *szInpFile)
             switch( iRowCount ) {
                 case 1:
                     giRegime = atoi(szTmp); // Regime.
-                    std::cout << "Regime: " << giRegime << std::endl;
-
                     break;
 
                 case 2:
@@ -714,17 +723,14 @@ bool ReadInputFile(char *szInpFile)
 
                 case 3:
                     g_hinitUcell.x = atoi(szTmp); // x cells.
-                    std::cout << "X cells: " << g_hinitUcell.x << std::endl;
                     break;
 
                 case 4:
                     g_hinitUcell.y = atoi(szTmp); // y cells.
-                    std::cout << "Y cells: " << g_hinitUcell.y << std::endl;
                     break;
 
                 case 5:
                     g_hinitUcell.z = atoi(szTmp); // z cells.
-                    std::cout << "Z cells: " << g_hinitUcell.z << std::endl;
                     break;
 
                 case 6:

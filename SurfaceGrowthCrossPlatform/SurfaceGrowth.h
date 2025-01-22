@@ -225,7 +225,7 @@ void SetColorW(float4 *g_dcolor, SimParams* g_hParams);
 const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* g_hParams);
 
 char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
-                     FILE *fResults, char *szPdbPath);
+                      FILE *fResults, char *szPdbPath);
 
 }   // extern "C"
 

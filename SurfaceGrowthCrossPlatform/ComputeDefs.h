@@ -28,19 +28,6 @@ typedef unsigned short ushort;
 #define NDIM  3
 #endif
 
-///@todo: remove if not used
-struct Float3 : public float3
-{
-    Float3 operator+(const Float3& other) const
-    {
-        Float3 result;
-        result.x = x + other.x;
-        result.y = y + other.y;
-        result.z = z + other.z;
-        return result;
-    }
-};
-
 // structures
 typedef struct _VecR2
 {real x, y;}

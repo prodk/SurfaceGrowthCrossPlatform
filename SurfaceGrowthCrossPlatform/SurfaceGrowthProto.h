@@ -13,6 +13,7 @@ bool ReadInputFile(char *szInpFile);
 void AllocArrays ();
 void FreeArrays ();
 int SetParams();                // If 0 then the system is too large.
+void PrintParams();
 int SetupJob();                 // If 0 then error in initialization of coordinates.
 void InitRand (int randSeedI, SimParams *hparams);
 real RandR (SimParams *hparams);

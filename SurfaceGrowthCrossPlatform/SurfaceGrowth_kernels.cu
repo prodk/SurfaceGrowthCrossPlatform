@@ -68,10 +68,10 @@ void EvalDiffusion(TBuf *tBuf, real *rrDiffuseAv, FILE *file, SimParams *hparams
 // Compute phi.
 __device__ real EamPhi(real r)
 {
-    real rei = dparams.rei;     // Diminish number of calls to constant memory.
-    real r_rei = r*rei;         // Avoid redundant multiplications.
+    const real rei = dparams.rei;     // Diminish number of calls to constant memory.
+    const real r_rei = r*rei;         // Avoid redundant multiplications.
 
-    real phi =
+    const real phi =
         dparams.A * expf( -dparams.alpha * (r_rei-1.f) ) /
     ( 1.f + powf( (r_rei - dparams.kappa), 20.f) ) -
         dparams.B * expf( -dparams.beta * (r_rei-1.f) ) /
@@ -83,8 +83,8 @@ __device__ real EamPhi(real r)
 // Compute f.
 __device__ real Eamf(real r)
 {
-    real rei = dparams.rei;
-    real r_rei = r*rei;
+    const real rei = dparams.rei;
+    const real r_rei = r*rei;
 
     return
         dparams.fe*expf( -dparams.beta*(r_rei-1.f) ) /
@@ -94,8 +94,8 @@ __device__ real Eamf(real r)
 // When rho < rhon = 0.85*rhoe
 __device__ real EamFrhoSmall(real rho)
 {
-    real rhoni = dparams.rhoei * 1.176471f; // 1 / (0.85*rhoe)
-    real rho_rhoni = rho*rhoni - 1.f;
+    const real rhoni = dparams.rhoei * 1.176471f; // 1 / (0.85*rhoe)
+    const real rho_rhoni = rho*rhoni - 1.f;
 
     return
         dparams.Fn[0] +
@@ -106,8 +106,8 @@ __device__ real EamFrhoSmall(real rho)
 // When rhon <= rho < rhoo = 1.15*rhoe.
 __device__ real EamFrhoMedium(real rho)
 {
-    real rhoei = dparams.rhoei;
-    real rho_rhoei = rho*rhoei - 1.f;
+    const real rhoei = dparams.rhoei;
+    const real rho_rhoei = rho*rhoei - 1.f;
 
     return
         dparams.F[0] +
@@ -118,8 +118,8 @@ __device__ real EamFrhoMedium(real rho)
 // When rhoo = 1.15*rhoe <= rho.
 __device__ real EamFrhoLarge(real rho)
 {
-    real rhoei = dparams.rhoei;
-    real rho_rhoei = rho*rhoei;
+    const real rhoei = dparams.rhoei;
+    const real rho_rhoei = rho*rhoei;
 
     return
         dparams.Fe * ( 1.f - logf(powf(rho_rhoei, dparams.eta)) ) * powf(rho_rhoei, dparams.eta);
@@ -127,12 +127,12 @@ __device__ real EamFrhoLarge(real rho)
 // Check what embedding functional to use.
 __device__ real EamF(real rho)
 {
-    real rhoe = dparams.rhoe;
-    real rhon = 0.85f*rhoe;
+    const real rhoe = dparams.rhoe;
+    const real rhon = 0.85f*rhoe;
 
-    if(rho < rhon) return EamFrhoSmall(rho);
+    if (rho < rhon) return EamFrhoSmall(rho);
 
-    real rhoo = 1.15f*rhoe;
+    const real rhoo = 1.15f*rhoe;
     if( (rho >= rhon) && (rho < rhoo) ) return EamFrhoMedium(rho);
 
     if( rho >= rhoo ) return EamFrhoLarge(rho);
@@ -146,15 +146,15 @@ __device__ real EamF(real rho)
 // dphi / dr
 __device__ real EamDPhi(real r)
 {
-    real rei = dparams.rei;         // Diminish number of calls to constant memory.
-    real alpha = dparams.alpha;
-    real beta = dparams.beta;
-    real kappa = dparams.kappa;
-    real lambda = dparams.lambda;
-    real r_rei = r*rei;             // Avoid redundant multiplication.
+    const real rei = dparams.rei;         // Diminish number of calls to constant memory.
+    const real alpha = dparams.alpha;
+    const real beta = dparams.beta;
+    const real kappa = dparams.kappa;
+    const real lambda = dparams.lambda;
+    const real r_rei = r*rei;             // Avoid redundant multiplication.
 
-    real denomA = 1.f + powf( (r_rei - kappa), 20.f );
-    real denomB = 1.f + powf( (r_rei - lambda) , 20.f );
+    const real denomA = 1.f + powf( (r_rei - kappa), 20.f );
+    const real denomB = 1.f + powf( (r_rei - lambda) , 20.f );
 
     return
         (
@@ -168,12 +168,12 @@ __device__ real EamDPhi(real r)
 // df / dr
 __device__ real EamDf(real r)
 {
-    real rei = dparams.rei;
-    real beta = dparams.beta;
-    real lambda = dparams.lambda;
-    real r_rei = r*rei;             // Avoid redundant multiplication.
+    const real rei = dparams.rei;
+    const real beta = dparams.beta;
+    const real lambda = dparams.lambda;
+    const real r_rei = r*rei;             // Avoid redundant multiplication.
 
-    real denomB = 1.f + powf( (r_rei - lambda) , 20.f);
+    const real denomB = 1.f + powf( (r_rei - lambda) , 20.f);
 
     return
         -dparams.fe * rei * expf(-beta*(r_rei-1.f)) *
@@ -182,8 +182,8 @@ __device__ real EamDf(real r)
 // dF / drho when rho < rhon = 0.85*rhoe
 __device__ real EamDFrhoSmall(real rho)
 {
-    real rhoni = dparams.rhoei * 1.176471f; // 1/rhon = 1 / (0.85*rhoe)
-    real rho_rhoni = rho * rhoni - 1.f;     // Avoid redundant multiplication.
+    const real rhoni = dparams.rhoei * 1.176471f; // 1/rhon = 1 / (0.85*rhoe)
+    const real rho_rhoni = rho * rhoni - 1.f;     // Avoid redundant multiplication.
 
     return
         rhoni * (
@@ -195,8 +195,8 @@ __device__ real EamDFrhoSmall(real rho)
 // dF / drho when rhon <= rho < rhoo = 1.15*rhoe
 __device__ real EamDFrhoMedium(real rho)
 {
-    real rhoei = dparams.rhoei;
-    real rho_rhoei = rho*rhoei;
+    const real rhoei = dparams.rhoei;
+    const real rho_rhoei = rho*rhoei;
 
     return
         rhoei * (
@@ -208,9 +208,9 @@ __device__ real EamDFrhoMedium(real rho)
 // dF / drho when rhoo = 1.15*rhoe <= rho
 __device__ real EamDFrhoLarge(real rho)
 {
-    real rhoei = dparams.rhoei;
-    real eta = dparams.eta;
-    real rho_rhoei = rho*rhoei;
+    const real rhoei = dparams.rhoei;
+    const real eta = dparams.eta;
+    const real rho_rhoei = rho*rhoei;
 
     return
         - dparams.Fe * eta * rhoei * powf(rho_rhoei, (eta-1.f) ) *
@@ -219,12 +219,12 @@ __device__ real EamDFrhoLarge(real rho)
 // See derivative of what embedding functional to use.
 __device__ real EamDF(real rho)
 {
-    real rhoe = dparams.rhoe;
-    real rhon = 0.85f*rhoe;
+    const real rhoe = dparams.rhoe;
+    const real rhon = 0.85f*rhoe;
 
     if(rho < rhon) return EamDFrhoSmall(rho);
 
-    real rhoo = 1.15f*rhoe;
+    const real rhoo = 1.15f*rhoe;
     if( (rho >= rhon) && (rho < rhoo) ) return EamDFrhoMedium(rho);
 
     if( rho >= rhoo ) return EamDFrhoLarge(rho);
@@ -246,8 +246,8 @@ __device__ real EamDF(real rho)
 __global__
 void InitFccCoordsK(float4 *pos)
 {
-    float4 gap, c;
-    uint j, n, nx, ny, nz;
+    float4 gap{}, c{};
+    uint j = 0, n = 0, nx = 0, ny = 0, nz = 0;
 
     VDiv (gap, dparams.region, dparams.initUcell);      // Distance between the cells.
 
@@ -258,7 +258,7 @@ void InitFccCoordsK(float4 *pos)
     n = 4*(nx + ny * gridDim.x + nz * gridDim.x * gridDim.y);
 
     // Handle threads which do not work.
-    if(n > dparams.nMol - 4) return;
+    if (n > dparams.nMol - 4) return;
     VSet (c, nx + 0.25f, ny + 0.25f, nz + 0.25f);
 
     VMul (c, c, gap);
@@ -280,10 +280,10 @@ void InitFccCoordsK(float4 *pos)
 // Initialize coordinate of the nanoparticle atoms using fcc lattice above the graphene sheet.
 __global__ void InitSlabCoordsK( float4 *pos )
 {
-    float4 gap, c;
-    uint j, n, nx, ny, nz;
-    float3 region;
-    real shiftY;
+    float4 gap{}, c{};
+    uint j = 0, n = 0, nx = 0, ny = 0, nz = 0;
+    float3 region{};
+    real shiftY = 0.f;
 
     region.x = gridDim.x*dparams.a;
     // Number of cells along y * lattice constant.
@@ -309,7 +309,7 @@ __global__ void InitSlabCoordsK( float4 *pos )
     VMul (c, c, gap);
     VVSAdd (c, -0.5f, region);
     for (j = 0; j < 4; j ++) {
-        if(n < dparams.nMolMe)
+        if (n < dparams.nMolMe)
         {
             pos[n].x = c.x;
             pos[n].y = c.y + shiftY;
@@ -336,15 +336,15 @@ void InitGrapheneCoordsK(float4 *pos)
 //  \      /
 //  2\____/1        // Axes: y from right to left, x from bottom to top in this figure.
 
-    real dx, dy, x, y;
-    int n, cx, cy;
+    real dx = 0.f, dy = 0.f, x = 0.f, y = 0.f;
+    int n = 0, cx = 0, cy = 0;
 
-    real cos30 = 0.8660254038f;
+    constexpr real cos30 = 0.8660254038f;
 
     // Find index of the atom.
     n = blockIdx.x*blockDim.x + threadIdx.x;    // blockDim.x is assumed == 32
 
-    if( n < (dparams.nMol-dparams.nMolMe) )
+    if (n < (dparams.nMol-dparams.nMolMe))
     {
         // Find 2D index of the block in the grid of blocks.
         cy = blockIdx.x / dparams.initUcell.x;
@@ -395,11 +395,11 @@ void InitGrapheneCoordsK(float4 *pos)
         }
 
         // Additional shift depending on their grid number due to thread.
-        if( cy == 1 )
+        if ( cy == 1 )
             dx += 4.f*cos30;
         else if( cy == 2 )
             dy += 3.f;
-        else if( cy == 3 ) {
+        else if ( cy == 3 ) {
         dx += 4.f*cos30;
         dy += 3.f;
         }
@@ -432,18 +432,18 @@ __global__ void LeapfrogStepK (int part, float4 *dr, float3 *dv, float3 *da)
             VVSAdd (dv[n], 0.5f * dparams.deltaT, da[n]);
         }
     }
-    else if( (n >= dparams.nMolMe ) &&
+    else if ( (n >= dparams.nMolMe ) &&
         ( n < dparams.nMol ) )// For graphene don't process boundary atoms.
     {
-        real xLeft, yBottom, xRight, yTop;
-        real cos30 = cos(M_PI / 6.f);
+        real xLeft = 0.f, yBottom = 0.f, xRight = 0.f, yTop = 0.f;
+        const real cos30 = cos(M_PI / 6.f);
 
         xLeft = 0.5f*(cos30 - dparams.region.x);
         xRight = 0.5f*(dparams.region.x - cos30);
         yBottom = 0.5f*(1.f - dparams.region.y);
         yTop = 0.5f*(dparams.region.y - 1.f);
 
-        if( (dr[n].x != xLeft) && (dr[n].x < xRight) &&
+        if ( (dr[n].x != xLeft) && (dr[n].x < xRight) &&
             (dr[n].y != yTop) && (dr[n].y != yBottom) )
         {
             if (part == 1) {
@@ -459,9 +459,9 @@ __global__ void LeapfrogStepK (int part, float4 *dr, float3 *dv, float3 *da)
 __global__ void ApplyBoundaryCondK( float4 *dr )
 {
     // Index of molecule for current thread.
-    int n = blockIdx.x * blockDim.x + threadIdx.x;
+    const int n = blockIdx.x * blockDim.x + threadIdx.x;
     // Don't perform redundant threads to prevent memory overwriting.
-    if(n < dparams.nMol) {
+    if (n < dparams.nMol) {
         // Type manually without macroses to avoid problems.
         // x
         if (dr[n].x >= 0.5f * dparams.region.x)      dr[n].x -= dparams.region.x;
@@ -478,13 +478,13 @@ __global__ void ApplyBoundaryCondK( float4 *dr )
 __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount )
 {
     // Index of a molecule for current thread.
-    int n = blockIdx.x * blockDim.x + threadIdx.x;
-    real beta;
+    const int n = blockIdx.x * blockDim.x + threadIdx.x;
+    real beta = 0.f;
 
     // !Consider only carbon atoms.
-    if( (n >= dparams.nMolMe) && (n < dparams.nMol) )
+    if ( (n >= dparams.nMolMe) && (n < dparams.nMol) )
     {
-        real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
+        const real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
         beta =
             sqrtf( 1.f + dparams.gammaBerendsen *
             (dparams.temperature*1.5f*dparams.kB/kinEnergy - 1.f) );
@@ -493,11 +493,11 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
         dv[n].z = beta * dv[n].z;
     }
     // For metal atoms.
-    if( (dparams.iRegime == 2)&&(n < dparams.nMolMe)&&
+    if ( (dparams.iRegime == 2)&&(n < dparams.nMolMe)&&
         (stepCount > dparams.stepEquil)&&       // This is redundant.
         (stepCount < dparams.stepEquil + dparams.stepCool) )
     {
-        real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
+        const real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
         beta =
             sqrtf( 1.f + dparams.gammaBerendsen *
             (dparams.temperature*dparams.kB/kinEnergy - 1.f) );
@@ -510,23 +510,23 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
 // Deposit atoms (for Surface Growth regime).
 __global__ void InsertAtomsK( float4 *dr, float3 *dv, int nMolDeposited, int nMolToDeposit )
 {
-    real z = 0.49f * dparams.region.z;
+    const real z = 0.49f * dparams.region.z;
 
     // Index of molecule for current thread.
-    int n = blockIdx.x * blockDim.x + threadIdx.x;
+    const int n = blockIdx.x * blockDim.x + threadIdx.x;
 
-    int iDeposited = nMolDeposited;
-    int iInterval = iDeposited + nMolToDeposit;
+    const int iDeposited = nMolDeposited;
+    const int iInterval = iDeposited + nMolToDeposit;
 
-    if(n < dparams.nMolMe)      // Process only metalic atoms.
+    if (n < dparams.nMolMe)      // Process only metalic atoms.
     {
-        if( (n >= iDeposited) && (n < iInterval ) ) // Atoms to deposit.
+        if ( (n >= iDeposited) && (n < iInterval ) ) // Atoms to deposit.
         {
             dr[n].z = z;
             // Give initial velocity.
             dv[n].z = -dparams.velMagDepos;// !Note minus sign.
         }
-        if(n >= iInterval)      // It is early to deposit these atoms.
+        if (n >= iInterval)      // It is early to deposit these atoms.
         {
             dr[n].z = 1.5f*dparams.region.z + 0.5f*(n+1)*dparams.region.z;
             dv[n].x = 0.f;
@@ -541,13 +541,13 @@ __global__ void ApplyShearK( float4 *dr, float3 *da, real shear, real centerOfMa
                             uint *numOfSharedMols )
 {
     // Index of a molecule for current thread.
-    int n = blockIdx.x * blockDim.x + threadIdx.x;
+    const int n = blockIdx.x * blockDim.x + threadIdx.x;
 
-    if( n < dparams.nMolMe)
+    if ( n < dparams.nMolMe)
     {
-        real deltaR = centerOfMassX - dr[n].x;
+        const real deltaR = centerOfMassX - dr[n].x;
         // Apply shear only to atoms that are to the left to the center of mass.
-        if( deltaR > 0.f)
+        if ( deltaR > 0.f)
         {
             da[n].x += shear;
             unsigned int val = 1;
@@ -569,21 +569,21 @@ __global__ void ApplyShearK( float4 *dr, float3 *da, real shear, real centerOfMa
 // atoms in the cell, and then stores atomically index at that place.
 __global__ void BinAtomsIntoCellsK(float4 *dr, int *CELL, uint *molsInCells)
 {
-    float4  rShifted, r;                    // Shifted and initial coordinates.
-    int3    cc;                             // 3D index of the cell.
-    int     c, whereToWrite, n;             // Counters.
+    float4  rShifted{}, r{};                    // Shifted and initial coordinates.
+    int3    cc{};                               // 3D index of the cell.
+    int     c = 0, whereToWrite = 0, n = 0;     // Counters.
 
-    int     count = 0;                      // Reads have been made.
-    int     numOfIter = floor( (float)dparams.nMol/blockDim.x );    // Total number of reads.
+    int     count = 0;                          // Reads have been made.
+    const int numOfIter = floor( (float)dparams.nMol/blockDim.x );    // Total number of reads.
 
-    while( 1 )
+    while ( 1 )
     {
         n = blockDim.x*count + threadIdx.x; // Get particle index for current thread.
 
         // Check whether this is the last cycle.
-        if( count == numOfIter )
+        if ( count == numOfIter )
         {
-            if( n < dparams.nMol )  r = dr[n];  // Process partially filled portions.
+            if ( n < dparams.nMol )  r = dr[n];  // Process partially filled portions.
             else VZero(r);                      // Virtual particle, fill with 0.
 
             // Find index of the cell.
@@ -596,9 +596,9 @@ __global__ void BinAtomsIntoCellsK(float4 *dr, int *CELL, uint *molsInCells)
             VMul (cc, rShifted, dparams.invWidth);  // invWidth is placed in dparams to avoid division each time.
             c = VLinear (cc, dparams.cells);        // Convert index of the cell into 1D.
 
-            if( n < dparams.nMol )  // If the particle is not virtual.
+            if ( n < dparams.nMol )  // If the particle is not virtual.
             {
-                if( c == blockIdx.x )   // If the particle is in the desired cell.
+                if ( c == blockIdx.x )   // If the particle is in the desired cell.
                 {
                     // !Note here atomicAdd, but not atomicInc!
                     // It returns the previous nonincremented value, which is what we need.
@@ -1121,8 +1121,8 @@ label:
 // Each block first sums a subset of the array and stores the result in global memory;
 // when all blocks are done, the last block done reads each of these partial sums
 // and sums them up.
-__global__ void ComputeVSumK( float3 *dv,   // Array of velocities.
-                        float3 *hlpArray )  // Helper array, size of ceil(nMol / (2*blockDim.x)) is assumed
+__global__ void ComputeVSumK( float3 *dv,         // Array of velocities.
+                              float3 *hlpArray )  // Helper array, size of ceil(nMol / (2*blockDim.x)) is assumed
 {
     // We assume that each block at first computes partial sum of 2*blockDim.x elements.
     extern __shared__ float3 partialSum[];  // Size of 2*blockDim.x is assumed.
