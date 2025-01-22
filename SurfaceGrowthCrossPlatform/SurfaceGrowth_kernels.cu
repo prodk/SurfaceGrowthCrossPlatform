@@ -27,7 +27,7 @@ namespace
             return false;
         }
 
-        cudaThreadExit();
+        gpuErrchk(cudaThreadExit());
 
         const auto errorString = cudaGetErrorString(error);
         const std::string finalMessage = errorMessage + std::string(errorString);
@@ -2113,35 +2113,35 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
     cudaEvent_t start, stop, totalStart, totalStop;
 
 // Begin memory allocation.
-    cudaMalloc(&dr, hparams->nMol * sizeof(float4));
+    gpuErrchk(cudaMalloc(&dr, hparams->nMol * sizeof(float4)));
     // Also allocate memory for velocities and accelerations.
 
-    cudaMalloc(&dv, hparams->nMol * sizeof(float3));
+    gpuErrchk(cudaMalloc(&dv, hparams->nMol * sizeof(float3)));
 
-    cudaMalloc(&da, hparams->nMol * sizeof(float3));
+    gpuErrchk(cudaMalloc(&da, hparams->nMol * sizeof(float3)));
 
     // Helper array for computing system properties, total impulse, energy, etc.
     // its size is the size of the grid of blocks for summing.
-    cudaMalloc(&hlpArray, grid * sizeof(float3));
+    gpuErrchk(cudaMalloc(&hlpArray, grid * sizeof(float3)));
 
     // EAM.
-    cudaMalloc(&rho, hparams->nMolMe * sizeof(real));
+    gpuErrchk(cudaMalloc(&rho, hparams->nMolMe * sizeof(real)));
 
     // Allocate memory for particle indexes and neighbor list,
     // !note (hparams->maxMol+1) to avoid subtle bug!
-    cudaMalloc(&CELL, (hparams->maxMol+1) * sizeof(int));
+    gpuErrchk(cudaMalloc(&CELL, (hparams->maxMol+1) * sizeof(int)));
     // Number of neighbors.
-    cudaMalloc(&NN, hparams->nMol * sizeof(int));
+    gpuErrchk(cudaMalloc(&NN, hparams->nMol * sizeof(int)));
     // Indexes of neighboring atoms.
-    cudaMalloc(&NBL, hparams->nMol * hparams->iNebrMax * sizeof(int));
+    gpuErrchk(cudaMalloc(&NBL, hparams->nMol * hparams->iNebrMax * sizeof(int)));
     // Number of atoms in each cell.
-    cudaMalloc(&molsInCells, VProd(hparams->cells) * sizeof(uint));
+    gpuErrchk(cudaMalloc(&molsInCells, VProd(hparams->cells) * sizeof(uint)));
 
     if( (hparams->iRegime != 0) && (hparams->nMolMe != 0) ) // Allocate memory for friction force.
-        cudaMalloc(&dcarbonForce, hparams->nMolMe * sizeof(real));
+        gpuErrchk(cudaMalloc(&dcarbonForce, hparams->nMolMe * sizeof(real)));
     // If needed allocate memory for rdf.
     if( hparams->bRdf != 0 )
-        cudaMalloc(&histRdf, hparams->sizeHistRdf * sizeof(int));
+        gpuErrchk(cudaMalloc(&histRdf, hparams->sizeHistRdf * sizeof(int)));
 
     // Check errors.
     if (isCudaError("Problems with memory allocation! Exception: ", szPdbPath))
@@ -2152,9 +2152,9 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 // End memory allocation.
 
     // Copy data from host to device.
-    cudaMemcpy(dr, hr, hparams->nMol*sizeof(float4), cudaMemcpyHostToDevice);
-    cudaMemcpy(dv, hv, hparams->nMol*sizeof(float3), cudaMemcpyHostToDevice);
-    cudaMemcpy(da, ha, hparams->nMol*sizeof(float3), cudaMemcpyHostToDevice);
+    gpuErrchk(cudaMemcpy(dr, hr, hparams->nMol*sizeof(float4), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(dv, hv, hparams->nMol*sizeof(float3), cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(da, ha, hparams->nMol*sizeof(float3), cudaMemcpyHostToDevice));
 
     // If needed, make the first coordinate snapshot.
     if( hparams->bPdb != 0 ) {
@@ -2162,17 +2162,17 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
     }
 
     // Initialize variables for computing one timestep.
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
+    gpuErrchk(cudaEventCreate(&start));
+    gpuErrchk(cudaEventCreate(&stop));
     // Total time.
-    cudaEventCreate(&totalStart);
-    cudaEventCreate(&totalStop);
+    gpuErrchk(cudaEventCreate(&totalStart));
+    gpuErrchk(cudaEventCreate(&totalStop));
 
 // Begin computation of one time step.
     while(hparams->moreCycles)
     {
-        cudaEventRecord(start, 0);  // Record start time.
-        cudaEventRecord(totalStart, 0);
+        gpuErrchk(cudaEventRecord(start, 0));  // Record start time.
+        gpuErrchk(cudaEventRecord(totalStart, 0));
 
         ++hparams->stepCount;  // Increment step count.
 
@@ -2218,13 +2218,13 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             hparams->dispHi = 0.f;
             // Fill cells with -1 (empty particles),
             // !note (hparams->maxMol+1) to avoid subtle bug with index 0.
-            cudaMemset(CELL, -1, (hparams->maxMol+1) * sizeof(int));
+            gpuErrchk(cudaMemset(CELL, -1, (hparams->maxMol+1) * sizeof(int)));
             // Fill number of neighbors with 0.
-            cudaMemset(NN, 0, hparams->nMol * sizeof(int));
+            gpuErrchk(cudaMemset(NN, 0, hparams->nMol * sizeof(int)));
             // Fill neighbor list with -1.
-            cudaMemset(NBL, -1, hparams->nMol * hparams->iNebrMax * sizeof(int));
+            gpuErrchk(cudaMemset(NBL, -1, hparams->nMol * hparams->iNebrMax * sizeof(int)));
             // Fill number of atoms in each cell with 0.
-            cudaMemset(molsInCells, 0, VProd(hparams->cells) * sizeof(uint));
+            gpuErrchk(cudaMemset(molsInCells, 0, VProd(hparams->cells) * sizeof(uint)));
             // Define cells of atoms.
             BinAtomsIntoCellsK<<< dimGrid, dimBlock >>> (dr, CELL, molsInCells);
 
@@ -2260,7 +2260,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
                 2*block*sizeof(float3)      // Memory for dynamic array in shared memory.
                 >>>(dcarbonForce);
             // Copy force on host.
-            cudaMemcpy(&frictForce, dcarbonForce, sizeof(real), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(&frictForce, dcarbonForce, sizeof(real), cudaMemcpyDeviceToHost));
         }
         else frictForce.x = 0.f;
 
@@ -2278,7 +2278,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
                 2*block*sizeof(float3)      // Memory for dynamic array in shared memory.
                 >>>(dr, hlpArray);
             // Copy center of mass on host.
-            cudaMemcpy(&centerOfMass, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(&centerOfMass, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost));
 
             // Compute velocity of center of mass of the nanoparticle.
             ComputeCmVelK<<< grid,          // Number of blocks <= 1024.
@@ -2286,7 +2286,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
                 2*block*sizeof(float3)      // Memory for dynamic array in shared memory.
                 >>>(dv, hlpArray);
             // Copy velocity on host.
-            cudaMemcpy(&cmVel, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(&cmVel, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost));
 
             // Compute dimensions of the nanoparticle.
             // Compute minimum radius-vector.
@@ -2295,14 +2295,14 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
                 2*block*sizeof(float3)      // Memory for dynamic array in shared memory.
                 >>>(dr, hlpArray, 0);
             // Copy minimum radius vector on host.
-            cudaMemcpy(&particleSizeMin, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(&particleSizeMin, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost));
             // Compute maximum radius-vector.
             ComputeParticleSizeK<<< grid,   // Number of blocks <= 1024.
                 block,                      // Number of threads.
                 2*block*sizeof(float3)      // Memory for dynamic array in shared memory.
                 >>>(dr, hlpArray, 1);
             // Copy maximum radius-vector on host.
-            cudaMemcpy(&particleSize, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(&particleSize, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost));
             // Find difference particleSize = particleSize - particleSizeMin.
             particleSize.x = particleSize.x - particleSizeMin.x;
             particleSize.y = particleSize.y - particleSizeMin.y;
@@ -2353,7 +2353,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             2*block*sizeof(float3)      // Memory for dynamic array in shared memory.
             >>>(dv, hlpArray);
         // Copy total impulse on host.
-        cudaMemcpy(&vSum, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost);
+        gpuErrchk(cudaMemcpy(&vSum, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost));
 
         /// @todo: debug code start
 
@@ -2392,7 +2392,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
                         2*block*sizeof(float3)      // Memory for dynamic array in shared memory.
                     >>>(dv, hlpArray);
         // Copy maximum of squares of velocities on host.
-        cudaMemcpy(&vvMax, &hlpArray[0].x, sizeof(float), cudaMemcpyDeviceToHost);
+        gpuErrchk(cudaMemcpy(&vvMax, &hlpArray[0].x, sizeof(float), cudaMemcpyDeviceToHost));
 
         // Compute sum of squares of velocities.
         ComputeVvSumK<<< grid,                      // Number of blocks <= 1024.
@@ -2400,7 +2400,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
                         2*block*sizeof(float3)      // Memory for dynamic array in shared memory.
                         >>>(dv, hlpArray, hparams->cmVel.val);
         // Copy sum of squares of velocities on host.
-        cudaMemcpy(&vvSum, &hlpArray[0].x, sizeof(float), cudaMemcpyDeviceToHost);
+        gpuErrchk(cudaMemcpy(&vvSum, &hlpArray[0].x, sizeof(float), cudaMemcpyDeviceToHost));
 
         // Apply Berendsen thermostat,
         // for shear apply thermostat to all atoms after stepEquil,
@@ -2418,7 +2418,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         // Compute potential energy.
         ComputePotEnergyK<<< grid, block, 2*block*sizeof(float3) >>>(dr, hlpArray);
         // Copy potential energy on host.
-        cudaMemcpy(&uSum, &hlpArray[0].x, sizeof(float), cudaMemcpyDeviceToHost);
+        gpuErrchk(cudaMemcpy(&uSum, &hlpArray[0].x, sizeof(float), cudaMemcpyDeviceToHost));
 
         // Check errors.
         if (isCudaError("Problems with evaluation of properties! Exception: ", szPdbPath))
@@ -2443,11 +2443,11 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
                 hparams->shear += hparams->deltaF;
 
             // Zero number of atoms to which shear is applied.
-            cudaMemset(&molsInCells[0], 0, sizeof(uint));
+            gpuErrchk(cudaMemset(&molsInCells[0], 0, sizeof(uint)));
             ApplyShearK<<< dimGrid, dimBlock >>> ( dr, da, hparams->shear, hparams->centerOfMass.val, &molsInCells[0] );
             // Copy number of sheared atoms.
             uint hnOfShearedMol = 0;
-            cudaMemcpy(&hnOfShearedMol, &molsInCells[0], sizeof(uint), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(&hnOfShearedMol, &molsInCells[0], sizeof(uint), cudaMemcpyDeviceToHost));
             // !Compute total shear force   .
             hparams->totalShear = hnOfShearedMol*hparams->shear;
         }
@@ -2462,16 +2462,16 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         if(hparams->countRdf == hparams->limitRdf)
         {
             // Copy rdf on host.
-            cudaMemcpy(hHistRdf, histRdf, hparams->sizeHistRdf*sizeof(uint), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(hHistRdf, histRdf, hparams->sizeHistRdf*sizeof(uint), cudaMemcpyDeviceToHost));
             PrintRdf(hparams, hHistRdf);
             hparams->countRdf = 0;
         }
     }
 // End compute rdf.
 
-    cudaEventRecord(stop, 0);       // Record end time.
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&hTime, start, stop);
+    gpuErrchk(cudaEventRecord(stop, 0));       // Record end time.
+    gpuErrchk(cudaEventSynchronize(stop));
+    gpuErrchk(cudaEventElapsedTime(&hTime, start, stop));
 
     hparams->oneStep.val = hTime;
 // End EvalProps.
@@ -2486,7 +2486,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 
     if( (hparams->stepCount % hparams->stepPdb == 0) && (hparams->bPdb!=0)) {
         // Copy memory from device to host.
-        cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost);
+        gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost));
         CreatePdbFile(szPdbPath, hparams, hr);
     }
 
@@ -2500,9 +2500,9 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
         // Copy data from device to host,
         // if stepBckup is dividable by stepPdb, then hr has already been copied.
         if(hparams->stepBckup % hparams->stepPdb != 0)
-            cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost);
-        cudaMemcpy(hv, dv, hparams->nMol*sizeof(float3), cudaMemcpyDeviceToHost);
-        cudaMemcpy(ha, da, hparams->nMol*sizeof(float3), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(hv, dv, hparams->nMol*sizeof(float3), cudaMemcpyDeviceToHost));
+        gpuErrchk(cudaMemcpy(ha, da, hparams->nMol*sizeof(float3), cudaMemcpyDeviceToHost));
         if(iBckup) {
             iBckup = 0;
             file = fopen(hparams->szBckup0, "w+b");
@@ -2521,9 +2521,9 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 // End make backup.
 
     // Record total one step.
-    cudaEventRecord(totalStop, 0);      // Record end time.
-    cudaEventSynchronize(totalStop);
-    cudaEventElapsedTime(&hTimeTotal, totalStart, totalStop);
+    gpuErrchk(cudaEventRecord(totalStop, 0));      // Record end time.
+    gpuErrchk(cudaEventSynchronize(totalStop));
+    gpuErrchk(cudaEventElapsedTime(&hTimeTotal, totalStart, totalStop));
     hparams->totalTime += hTimeTotal*0.001f;
 
     }   // End while(hparams->moreCycles).
@@ -2532,28 +2532,28 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
     // Print total time.
     if( hparams->bResult != 0 )
         fprintf (fResults, "\nDuration of the simulation = %f s", hparams->totalTime);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
+    gpuErrchk(cudaEventDestroy(start));
+    gpuErrchk(cudaEventDestroy(stop));
 
-    cudaEventDestroy(totalStart);
-    cudaEventDestroy(totalStop);
+    gpuErrchk(cudaEventDestroy(totalStart));
+    gpuErrchk(cudaEventDestroy(totalStop));
 
     // Cleanup.
-    cudaFree(dr);
+    gpuErrchk(cudaFree(dr));
 
-    cudaFree(dv);
+    gpuErrchk(cudaFree(dv));
 
-    cudaFree(da);
-    cudaFree(hlpArray);
-    cudaFree(rho);
-    cudaFree(CELL);
-    cudaFree(NN);
-    cudaFree(NBL);
-    cudaFree(molsInCells);
+    gpuErrchk(cudaFree(da));
+    gpuErrchk(cudaFree(hlpArray));
+    gpuErrchk(cudaFree(rho));
+    gpuErrchk(cudaFree(CELL));
+    gpuErrchk(cudaFree(NN));
+    gpuErrchk(cudaFree(NBL));
+    gpuErrchk(cudaFree(molsInCells));
     if( dcarbonForce != 0)  // If regime != 0.
-        cudaFree(dcarbonForce);
+        gpuErrchk(cudaFree(dcarbonForce));
     if((hparams->bRdf != 0) && (histRdf != 0) )
-        cudaFree(histRdf);
+        gpuErrchk(cudaFree(histRdf));
     // Free host memory.
     if( (hparams->bRdf != 0) && (hHistRdf != 0) )
         free(hHistRdf);
@@ -2574,7 +2574,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
 const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
 {
     int i;
-    cudaMalloc(&dr, hparams->nMol * sizeof(float4));    // Allocate device memory.
+    gpuErrchk(cudaMalloc(&dr, hparams->nMol * sizeof(float4)));    // Allocate device memory.
     if(hparams->iRegime == 0)   // If bulk, then only fcc lattice.
     {
         uint max, middle, min;  // Numbers of unit cells.
@@ -2589,7 +2589,7 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
         // Execute the kernel.
         InitFccCoordsK<<< dimGrid, dimBlock >>>(dr);
         // Copy memory from device to host.
-        cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost);
+        gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost));
     }
     else if( hparams->iRegime == 1) // If surface growth, generate random Me coordinates for Me.
     {
@@ -2598,7 +2598,7 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
         dim3 dimGridCarbon(numBlocks, 1, 1);
         InitGrapheneCoordsK<<< dimGridCarbon, dimBlockCarbon >>>(dr);
         // Copy memory from device to host here to avoid overwriting memory for metal.
-        cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost);
+        gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost));
 
         // Generate random coordinates for metal atoms on host in advance.
         for(i = 0; i < hparams->nMolMe; i++)
@@ -2617,7 +2617,7 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
         dim3 dimGridCarbon(numBlocks, 1, 1);
         InitGrapheneCoordsK<<< dimGridCarbon, dimBlockCarbon >>>(dr);
         // Copy memory from device to host.
-        cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost);
+        gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost));
 
         // Define number of unit cells of metal and number of layers.
         if(hparams->nMolMe != 0)
@@ -2635,11 +2635,11 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
 
             InitSlabCoordsK<<<gridMe, blockMe>>>( dr );
             // Copy memory from device to host.
-            cudaMemcpy(hr, dr, hparams->nMolMe*sizeof(float4), cudaMemcpyDeviceToHost);
+            gpuErrchk(cudaMemcpy(hr, dr, hparams->nMolMe*sizeof(float4), cudaMemcpyDeviceToHost));
         }
     }
 
-    cudaFree(dr);
+    gpuErrchk(cudaFree(dr));
 
     char* errorString = 0;
     if (isCudaError("InitCoordsW failed: ", errorString))
@@ -2657,12 +2657,7 @@ void CudaInitW(int argc, char **argv)
 {
     // Get cuda device properties.
     int deviceCount = 0;
-    cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
-
-    if (error_id != cudaSuccess){
-        printf("cudaGetDeviceCount returned %d\n-> %s\n", (int)error_id, cudaGetErrorString(error_id));
-        exit(EXIT_FAILURE);
-    }
+    gpuErrchk(cudaGetDeviceCount(&deviceCount));
 
     // This function call returns 0 if there are no CUDA capable devices.
     if (deviceCount == 0){
@@ -2674,21 +2669,14 @@ void CudaInitW(int argc, char **argv)
     }
     // Set the first GPU as the working one.
     int gpuId = 0;
-    cudaSetDevice( gpuId );
-    cudaGetDeviceProperties(&gDeviceProp, 0);
+    gpuErrchk(cudaSetDevice( gpuId ));
+    gpuErrchk(cudaGetDeviceProperties(&gDeviceProp, 0));
 }
 
 void SetParametersW(SimParams *hostParams)
 {
     // Allocate device memory.
-    cudaError_t error_id =
-        cudaMemcpyToSymbol((const void*)&dparams, hostParams, sizeof(SimParams));
-
-    if (error_id != cudaSuccess)
-    {
-        printf("Memory error while copying %d\n-> %s\n", (int)error_id, cudaGetErrorString(error_id));
-        exit(EXIT_FAILURE);
-    }
+    gpuErrchk(cudaMemcpyToSymbol((const void*)&dparams, hostParams, sizeof(SimParams)));
 }
 
 }   // End extern "C".

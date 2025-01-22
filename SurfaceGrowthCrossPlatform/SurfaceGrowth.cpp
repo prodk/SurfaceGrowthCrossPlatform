@@ -105,7 +105,7 @@ int main(int argc, char* argv[])
     int deviceCount = 0;
 
     // Exit if there are no CUDA capable devices.
-    cudaGetDeviceCount(&deviceCount);
+    gpuErrchk(cudaGetDeviceCount(&deviceCount));
     if (deviceCount == 0){                  // Check the number of cuda devices.
         printf(TEXT("There are no CUDA capable devices!\n"));
         return 1;   // Exit the application.
@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
     CudaInitW(argc, (char**)&g_szCmdLine);
 
     // Get cuda device properties.
-    cudaGetDeviceProperties(&g_hDeviceProp, 0);
+    gpuErrchk(cudaGetDeviceProperties(&g_hDeviceProp, 0));
 
     std::cout << std::endl;
     std::cout << "GPU parameters:" << std::endl;
