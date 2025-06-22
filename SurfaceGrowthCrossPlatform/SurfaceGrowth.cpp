@@ -402,7 +402,7 @@ int SetParams()
 
     // Set seed for random numbers, it is in params structure.
     ///@todo: change back to 0 for production runs.
-    InitRand(5, &g_hSimParams);
+    InitRand(0, &g_hSimParams);
     // Copy parameters to the device, global variable dparams in const mem is initialized.
     SetParametersW(&g_hSimParams);          // Wrapper from .cu file.
 
@@ -574,7 +574,7 @@ void GrapheneInit()
 // Code for generation of random numbers (from Rapaport).
 void InitRand (int randSeedI, SimParams *hparams)
 {
-    struct tm tv;
+    struct tm tv {};
 
     if (randSeedI != 0)
     {
