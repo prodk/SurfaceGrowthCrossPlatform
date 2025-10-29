@@ -123,6 +123,10 @@ int main(int argc, char* argv[])
     std::cout << "GPU id = " << std::string(g_hDeviceProp.uuid.bytes) << std::endl;
     std::cout << "Compute capability = " << g_hDeviceProp.major << "." << g_hDeviceProp.minor << std::endl;
     std::cout << "Max threads per block = " << g_hDeviceProp.maxThreadsPerBlock << std::endl;
+    std::cout << "maxThreadsDim = " << g_hDeviceProp.maxThreadsDim[0] << " "
+        << g_hDeviceProp.maxThreadsDim[1] << " " << g_hDeviceProp.maxThreadsDim[2] << std::endl;
+    std::cout << "maxGridSize = " << g_hDeviceProp.maxGridSize[0] << " "
+        << g_hDeviceProp.maxGridSize[1] << " " << g_hDeviceProp.maxGridSize[2] << std::endl;
     std::cout << "Total global memory = " << g_hDeviceProp.totalGlobalMem <<
                  ", Total constant memroy = " << g_hDeviceProp.totalConstMem <<
                  ", Memory bus width = " << g_hDeviceProp.memoryBusWidth << std::endl;

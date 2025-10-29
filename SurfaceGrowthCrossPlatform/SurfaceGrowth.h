@@ -41,7 +41,7 @@
 #define MASK_RAND   2147483647
 #define SCALE  0.4656612873e-9
 
-// Some definitions from windows.h
+// Some definitions from windows.h (obsolete).
 #ifndef TEXT
 #define TEXT(quote) quote
 #endif

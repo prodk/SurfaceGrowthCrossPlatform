@@ -27,7 +27,7 @@ void GrapheneInit();
 
 // Array of structures with data for materials (metals) (from Zhou et al.).
 // Order is important: Cu(0), Ag(1), Au(2), Ni(3), Al(4), Pb(5)
-MATERIAL Material [] =
+constexpr MATERIAL Material [] =
 {
     // copper Cu(0)
     // szName,  re,        fe,        rhoe,        alpha,     beta,      A,       B,

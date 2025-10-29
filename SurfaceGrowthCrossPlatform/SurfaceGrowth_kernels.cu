@@ -254,7 +254,7 @@ void InitFccCoordsK(float4 *pos)
     // Define atom indeces.
     nx = blockIdx.x;
     ny = blockIdx.y;
-    nz = threadIdx.z;
+    nz = threadIdx.x;
     n = 4*(nx + ny * gridDim.x + nz * gridDim.x * gridDim.y);
 
     // Handle threads which do not work.
@@ -453,7 +453,7 @@ __global__ void LeapfrogStepK (int part, float4 *dr, float3 *dv, float3 *da)
                 VVSAdd (dv[n], 0.5f * dparams.deltaT, da[n]);
             }
         }
-    }   // End else if( (n >= dparams.nMolMe ) .
+    }   // End else if( (n >= dparams.nMolMe ).
 }
 
 __global__ void ApplyBoundaryCondK( float4 *dr )
@@ -494,7 +494,7 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
     }
     // For metal atoms.
     if ( (dparams.iRegime == 2)&&(n < dparams.nMolMe)&&
-        (stepCount > dparams.stepEquil)&&       // This is redundant.
+        (stepCount > dparams.stepEquil) &&       // This is redundant.
         (stepCount < dparams.stepEquil + dparams.stepCool) )
     {
         const real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
@@ -829,7 +829,7 @@ __global__ void ComputeForcesK (    float3  *a,             // Acceleration (out
     // Zero quntities.
     uSum = 0.f;
 
-    // Index of molecule for current thread.
+    // Index of the molecule for the current thread.
     int i = blockIdx.x * blockDim.x + threadIdx.x;  // Step 1.
     // Define what atom we have.
     if( i < dparams.nMolMe ) atomType = 0;  // Metal.
@@ -2087,7 +2087,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
     // For maxThreadsPerBlock = 512, nMol <= 1024 * 1024 = 1048576.
     // For maxThreadsPerBlock = 1024, nMol <= 2048 * 2048 = 4194304.
 
-    constexpr uint maxThreadsPerBlock = 1024; /// @todo: change to 1024
+    constexpr uint maxThreadsPerBlock = 1024;
     constexpr uint maxBlockCount = 2 * maxThreadsPerBlock; /// @todo: for maxThreadsPerBlock use 2048
     uint grid = (uint) ceil((float)hparams->nMol / maxBlockCount);
     uint block = maxThreadsPerBlock;       // Threads per block for summation.
@@ -2583,7 +2583,8 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
         min = hparams->initUcell.z;
 
         // Each thread handles one unit cell, and 4 atoms for fcc lattice.
-        dim3 dimBlock(1, 1, min);       // Number of threads in the block (3D), min <= 512 cells.
+        // Important: max dimBlock.z is only 64, so use .x or .y, which are 1024 max.
+        dim3 dimBlock(min, 1, 1);       // Number of threads in the block (3D), min <= 512 cells.
         // Each block handles a strip of height min cells, length and width is 1 cell.
         dim3 dimGrid(max, middle);      // Grid size (number of blocks in 2D grid).
         // Execute the kernel.

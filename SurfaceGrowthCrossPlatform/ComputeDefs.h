@@ -18,7 +18,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-typedef float real;
+using real = float;
 
 // from cutil_math.h
 typedef unsigned int uint;
