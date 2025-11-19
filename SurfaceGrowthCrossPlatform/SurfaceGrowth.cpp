@@ -64,7 +64,7 @@ int     g_hcellShiftZ = 4;          // Number of cells under the graphene layer.
 VecR    g_hregion;                  // Dimension of the simulation cell.
 
 // Parameters, default values.
-real    g_ha0 = 1.42;                   // Interatomic distance in graphene, angstrom.
+constexpr real    g_ha0 = 1.42;         // Interatomic distance in graphene, angstrom.
 VecI    g_hinitUcell = {7, 7, 7};       // Number of unit cells of the surface.
 real    g_hepsilon = 0.0087381;         // Lennard-Jones parameter, eV.
 real    g_hsigma = 2.4945;              // Lennard-Jones parameter, angstrom.
@@ -92,10 +92,11 @@ int g_hcountDiffuseAv = 0;
 float3  g_hvSum;                           // Total impulse.
 SimParams g_hSimParams;                    // Is used for communication between UI and wrappers (and kernels).
 float4  *g_hr = nullptr;                   // Host array for positions, note float4.
+float4  *g_hspecForcesAndEnergy = nullptr; // Host, forces and potential energy of atoms of one type (e.g. metal) from another type (e.g. carbon).
 float3  *g_hv = nullptr, *g_ha = nullptr;  // Host arrays for velocities and forces of molecules.
+
 // Device variables.
 float4  *g_dr = nullptr;                   // Device array for positions.
-float4  *g_dcolor = nullptr;               // Device array for color.
 
 /////////////////////////
 // Program's entry point.
@@ -164,7 +165,7 @@ int main(int argc, char* argv[])
     // Begin computations.
     printf(TEXT("\nPerforming computations. Wait...\n"));
     const char* errorString =
-        DoComputationsW(g_hr, g_hv, g_ha, &g_hSimParams, g_fResult, g_szPdb);
+        DoComputationsW(g_hr, g_hv, g_ha, g_hspecForcesAndEnergy, &g_hSimParams, g_fResult, g_szPdb);
 
     if (errorString != 0) {
         printf(TEXT("Problems with DoComputationsW! We exit!\n"));
@@ -187,6 +188,7 @@ void AllocArrays () // Allocate host memory.
     AllocMem(g_hr, g_hSimParams.nMol, float4);
     AllocMem(g_hv, g_hSimParams.nMol, float3);
     AllocMem(g_ha, g_hSimParams.nMol, float3);
+    AllocMem(g_hspecForcesAndEnergy, g_hSimParams.nMol, float4);
 }
 
 void FreeArrays ()  // Free global memory on host and close files.
@@ -197,6 +199,9 @@ void FreeArrays ()  // Free global memory on host and close files.
         free(g_hv);
     if (g_ha)
         free(g_ha);
+
+    if (g_hspecForcesAndEnergy)
+        free(g_hspecForcesAndEnergy);
 
     if (g_fResult)
         fclose(g_fResult);
@@ -445,6 +450,7 @@ int SetupJob()
 
     InitVels();                         // Initialize velocities on host.
     InitAccels();                       // Initialize accelerations on host.
+    InitSpecForcesAndEnergy();
     AccumProps(0, &g_hSimParams);       // Zero properties.
     g_hSimParams.nebrNow = 1;           // Neighbor list should be built.
 
@@ -653,6 +659,17 @@ void InitAccels ()
 {
     for(int n = 0; n < g_hSimParams.nMol; n++)
         VZero (g_ha[n]);
+}
+
+void InitSpecForcesAndEnergy()
+{
+    for (int n = 0; n < g_hSimParams.nMol; n++)
+    {
+        g_hspecForcesAndEnergy[n].x = 0.0f;
+        g_hspecForcesAndEnergy[n].y = 0.0f;
+        g_hspecForcesAndEnergy[n].z = 0.0f;
+        g_hspecForcesAndEnergy[n].w = 0.0f;
+    }
 }
 
 // Read input file, returns 0 if there is some error.

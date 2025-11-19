@@ -21,6 +21,7 @@ void VRand (float3 *p, SimParams *hparams);
 void VRandRfloat4 (float4 *p, SimParams *hparams);
 void InitVels();
 void InitAccels();
+void InitSpecForcesAndEnergy();
 void AccumProps (int icode, SimParams *hparams);
 void EamInit();
 void GrapheneInit();

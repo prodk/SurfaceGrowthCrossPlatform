@@ -234,14 +234,14 @@ void SetColorW(float4 *g_dcolor, SimParams* g_hParams);
 // Wrappers for calculations.
 const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* g_hParams);
 
-char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
+char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAndEnergy, SimParams *hparams,
                       FILE *fResults, char *szPdbPath);
 
 }   // extern "C"
 
 // Units of measurement
 // Carbon atomic mass = 12.0107 * 1.66053 * 10^(-27) = 19.9441 * 10^(-27) kg
-// Graphite bond length 1.42 angsrom
+// Graphite bond length 1.42 angstrom
 // time unit = 0.2 ps
 // energy unit is chosen to set stepCount == 0.0005 equal to 0.1fs
 // energy unit == 6.275049 * 10^(-2)eV == 10.0538208 * 10^(-21) J

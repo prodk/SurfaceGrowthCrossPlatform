@@ -801,7 +801,8 @@ __global__ void ComputeForcesK (    float3  *a,             // Acceleration (out
                                     int *NN,                // Array of number of neighbors.
                                     int *NBL,               // Neigbors list.
                                     real *rho,              // Electron density for metal atom.
-                                    real *fForce )          // Friction force (out).
+                                    real *fForce,           // Friction force (out).
+                                    float4 *specForcesAndEnergy) // Forces/pot.energy that of atoms of one type caused by atoms of another type.
 {
     float3  fSum, C;            // Forces.
     float4  A, B, deltaR;       // Coordinates.
@@ -914,8 +915,15 @@ __global__ void ComputeForcesK (    float3  *a,             // Acceleration (out
                         VSCopy (C, fcVal, deltaR);
 
                         VVAdd(fSum, C);     // Step 13.
+
                         // Save also friction force.
                         VVAdd(frictForceVal, C);
+
+                        // Save the forces acting from carbon on metal.
+                        VVAdd(specForcesAndEnergy[i], C);
+
+                        // Save the potential energy.
+                        specForcesAndEnergy[i].w += uVal;
                     }
                     break;  // End metal.
 
@@ -936,6 +944,12 @@ __global__ void ComputeForcesK (    float3  *a,             // Acceleration (out
                         VSCopy (C, fcVal, deltaR);
 
                         VVAdd(fSum, C);     // Step 13.
+
+                        // Save the forces acting from metal on carbon.
+                        VVAdd(specForcesAndEnergy[i], C);
+
+                        // Save the potential energy.
+                        specForcesAndEnergy[i].w += uVal;
 
                     }
                     else                // Neighbor is also carbon, so compute spring force.
@@ -2035,7 +2049,7 @@ extern "C"  // Can be deleted, but then also in SurfaceGrowth.h.
 
 
 // Calls computational kernels when OpenGL is not used.
-char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
+char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAndEnergy, SimParams *hparams,
                      FILE *fResults, char *szPdbPath)
 {
     // Pointers to host memory.
@@ -2067,6 +2081,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             *da,            // Accelerations.
             *hlpArray;      // Helper array.
     float4  *dr;            // Positions.
+
+    float4  *dspecForcesAndEnergy{nullptr};    // Forces acting on one type of atoms (e.g. metal) from other atom type (carbon).
 
     real    *dcarbonForce = 0;  // Forces acting on metal atoms from carbon atoms (in x direction).
 
@@ -2137,8 +2153,11 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
     // Number of atoms in each cell.
     gpuErrchk(cudaMalloc(&molsInCells, VProd(hparams->cells) * sizeof(uint)));
 
+    gpuErrchk(cudaMalloc(&dspecForcesAndEnergy, hparams->nMol * sizeof(float4)));
+
     if( (hparams->iRegime != 0) && (hparams->nMolMe != 0) ) // Allocate memory for friction force.
         gpuErrchk(cudaMalloc(&dcarbonForce, hparams->nMolMe * sizeof(real)));
+
     // If needed allocate memory for rdf.
     if( hparams->bRdf != 0 )
         gpuErrchk(cudaMalloc(&histRdf, hparams->sizeHistRdf * sizeof(int)));
@@ -2245,7 +2264,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
             EamComputeRhoK<<< dimGrid, dimBlock >>>(rho, dr, NN, NBL);
 
         // Compute and save in the dcarbonForce forces acting from C on Me.
-        ComputeForcesK<<< dimGrid, dimBlock >>> (da, dr, NN, NBL, rho, dcarbonForce);
+        ComputeForcesK<<< dimGrid, dimBlock >>> (da, dr, NN, NBL, rho, dcarbonForce, dspecForcesAndEnergy);
 
         // Check errors.
         if (isCudaError("Problems with force evaluatin! Exception: ", szPdbPath))
@@ -2550,6 +2569,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, SimParams *hparams,
     gpuErrchk(cudaFree(NN));
     gpuErrchk(cudaFree(NBL));
     gpuErrchk(cudaFree(molsInCells));
+    gpuErrchk(cudaFree(dspecForcesAndEnergy));
+
     if( dcarbonForce != 0)  // If regime != 0.
         gpuErrchk(cudaFree(dcarbonForce));
     if((hparams->bRdf != 0) && (histRdf != 0) )
@@ -2669,7 +2690,7 @@ void CudaInitW(int argc, char **argv)
         printf("Detected %d CUDA Capable device(s)\n", deviceCount);
     }
     // Set the first GPU as the working one.
-    int gpuId = 0;
+    constexpr int gpuId = 0;
     gpuErrchk(cudaSetDevice( gpuId ));
     gpuErrchk(cudaGetDeviceProperties(&gDeviceProp, 0));
 }
