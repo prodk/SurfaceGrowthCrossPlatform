@@ -27,7 +27,7 @@ namespace
             return false;
         }
 
-        gpuErrchk(cudaThreadExit());
+        gpuErrchk(cudaDeviceReset());
 
         const auto errorString = cudaGetErrorString(error);
         const std::string finalMessage = errorMessage + std::string(errorString);
@@ -47,11 +47,14 @@ namespace
 
 void AccumProps (int icode, SimParams *hparams);    // Accumulate properties.
 void PrintSummary (FILE *fp, SimParams *hparams);   // Print results in a file.
-int CreatePdbFile(char *szFilePath, SimParams *hparams, float4 *r);// Create .pdb file.
+int CreatePdbFile(char * szPdb, SimParams *hparams, float4 *r);
 void PrintRdf(SimParams *hparams, uint *hHistRdf);  // Prints rdf data in a file.
+void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy);
+
 // Random numbers.
 real RandR (SimParams *hparams);
 void VRandRfloat4 (float4 *p, SimParams *hparams);
+
 // Host functions for diffusion.
 void InitDiffusion(TBuf *tBuf, real *rrDiffuseAv, SimParams *hparams);
 void ZeroDiffusion(real *rrDiffuseAv, SimParams *hparams);
@@ -2178,6 +2181,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     // If needed, make the first coordinate snapshot.
     if( hparams->bPdb != 0 ) {
         CreatePdbFile(szPdbPath, hparams, hr);
+        DumpSpecialForcesAndEnergy(hparams, hr, hspecForcesAndEnergy);
     }
 
     // Initialize variables for computing one timestep.
@@ -2507,6 +2511,9 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         // Copy memory from device to host.
         gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost));
         CreatePdbFile(szPdbPath, hparams, hr);
+
+        gpuErrchk(cudaMemcpy(hspecForcesAndEnergy, dspecForcesAndEnergy, hparams->nMol * sizeof(float4), cudaMemcpyDeviceToHost));
+        DumpSpecialForcesAndEnergy(hparams, hr, hspecForcesAndEnergy);
     }
 
     if( hparams->stepCount >= hparams->stepLimit )
@@ -2644,10 +2651,9 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
         // Define number of unit cells of metal and number of layers.
         if(hparams->nMolMe != 0)
         {
-            int initUcellMeX, initUcellMeY, numOfLayers;
-            initUcellMeX = ( hparams->region.x - 2*hparams->a ) / hparams->a;
-            initUcellMeY = ( hparams->region.y - 2*hparams->a ) / hparams->a;
-            numOfLayers = ceil(hparams->nMolMe*0.25 /(initUcellMeX*initUcellMeY) );
+            const int initUcellMeX = static_cast<int>(( hparams->region.x - 2*hparams->a ) / hparams->a);
+            const int initUcellMeY = static_cast<int>(( hparams->region.y - 2*hparams->a ) / hparams->a);
+            const int numOfLayers = static_cast<int>(ceil( hparams->nMolMe*0.25 /(initUcellMeX*initUcellMeY) ));
 
             hparams->initUcellMeX = initUcellMeX;
             hparams->initUcellMeY = initUcellMeY;
@@ -2785,9 +2791,9 @@ void PrintSummary (FILE *fp, SimParams *hparams)
 // Write coordinates to .pdb (protein data bank) file for future use with VMD.
 int CreatePdbFile(char *szPdb, SimParams *hparams, float4 *r)
 {
-    int i;
+    int i{0};
     int n = 0;
-    real m = 0.f;
+    real m{0.f};
     char szFileName[MAX_PATH],szBuf[MAX_PATH];
 
     ZeroMemory(szBuf, MAX_PATH);
@@ -2810,7 +2816,7 @@ int CreatePdbFile(char *szPdb, SimParams *hparams, float4 *r)
         return 0;
     }
 
-    // Print information to pdb file accordingly to its format.
+    // Print information to pdb file according to its format.
     for(i = 0; i < hparams->nMol; i++)
     {
                                         //      Name                   Position in a file
@@ -2875,7 +2881,7 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     lstrcat(szFileName,TEXT(".txt"));
     // This code in Rapaport is outside of PrintRdf,
     // but to avoid using real array for histRdf I put this code inside PrintRdf.
-    real normFac = VProd(hparams->particleSize)*Cube(hparams->intervalRdf) /
+    auto normFac = VProd(hparams->particleSize)*Cube(hparams->intervalRdf) /
                 (2.f * M_PI * hparams->countRdf);
     // To avoid negative values, divide sequentially.
     normFac = normFac/hparams->nMolMe;
@@ -2893,6 +2899,37 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     }
 
     fclose(rdf);
+}
+
+void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy)
+{
+    std::string fileName{"forces_"};
+    std::stringstream ss;
+
+    const auto fileNumber = hparams->stepCount / hparams->stepPdb;
+
+    ss << fileNumber << "_step_" << hparams->stepCount << ".txt";
+
+    fileName += ss.str();
+
+    std::ofstream outFile(fileName);
+    if (outFile.is_open())
+    {
+        outFile << "id x y z force_x force_y force_z potential_energy\n";
+        for (int idx = 0; idx < hparams->nMol; ++idx)
+        {
+            std::stringstream fss;
+            fss << idx << " " << r[idx].x << " " << r[idx].y << " " << r[idx].z << " " << specForcesAndEnergy[idx].x
+                << " " << specForcesAndEnergy[idx].y << " " << specForcesAndEnergy[idx].z << " " << specForcesAndEnergy[idx].w << "\n";
+            outFile << fss.str();
+        }
+
+        outFile.close();
+    }
+    else
+    {
+        std::cerr << "Failed to open special forces file: " << fileName << std::endl;
+    }
 }
 
 // Generates uniformly distributed random number as VRandR.
@@ -2960,7 +2997,7 @@ void AccumDiffusion(TBuf *tBuf, real *rrDiffuseAv, FILE *file, SimParams *hparam
             ++ hparams->countDiffuseAv;
             if(hparams->countDiffuseAv == hparams->limitDiffuseAv)
             {
-                fac = 1. / (NDIM* 2 * hparams->stepDiffuse *
+                fac = 1.f / (NDIM * 2 * hparams->stepDiffuse *
                     hparams->deltaT * hparams->limitDiffuseAv);
                 for(j = 1; j < hparams->nValDiffuse; j++)
                     rrDiffuseAv[j] *= fac / j;
@@ -2990,9 +3027,9 @@ void EvalDiffusion(TBuf *tBuf, real *rrDiffuseAv, FILE *file, SimParams *hparams
             tBuf[nb].rrDiffuse[ni] = 0.;
             VSub(dr, tBuf[nb].rTrue, centerOfMass);
             VDiv(dr, dr, hparams->region);
-            dr.x = Nint(dr.x);
-            dr.y = Nint(dr.y);
-            dr.z = Nint(dr.z);
+            dr.x = static_cast<float>(Nint(dr.x));
+            dr.y = static_cast<float>(Nint(dr.y));
+            dr.z = static_cast<float>(Nint(dr.z));
             VMul(dr, dr, hparams->region);
             VAdd(tBuf[nb].rTrue, centerOfMass, dr);
             VSub(dr, tBuf[nb].rTrue, tBuf[nb].orgR);

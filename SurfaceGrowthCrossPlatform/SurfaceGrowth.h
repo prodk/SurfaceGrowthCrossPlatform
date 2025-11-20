@@ -14,6 +14,8 @@
 #include <ctime>
 #include <iomanip>
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 // CUDA runtime must be declared before __CUDACC__.
