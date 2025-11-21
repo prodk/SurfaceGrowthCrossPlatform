@@ -1,16 +1,16 @@
 0           # regime, 0 - bulk, 1 - surface growth, 2 - shear	1
-1           # metal Cu(0), Ag(1), Au(2), Ni(3), Al(4), Pb(5)	2
-3           # unit cells in x					3
-3           # unit cells in y					4
-3           # unit cells in z					5
+3           # metal Cu(0), Ag(1), Au(2), Ni(3), Al(4), Pb(5)	2
+4           # unit cells in x					3
+4           # unit cells in y					4
+4           # unit cells in z					5
 330         # temperature	(K)				6
-25000         # number of metal atoms (if regime is not bulk)	7
+100         # number of metal atoms (if regime is not bulk)	7
 0.0087381   # epsilon for metal-carbon LJ interaction		8
 2.4945      # sigma for metal-carbon LJ interaction		9
 
 # time parameters
 
-1000        # step limit					10
+10000        # step limit					10
 0.001       # time step						11
 250         # averaging						12
 30000       # equilibration					13

@@ -49,7 +49,7 @@ void AccumProps (int icode, SimParams *hparams);    // Accumulate properties.
 void PrintSummary (FILE *fp, SimParams *hparams);   // Print results in a file.
 int CreatePdbFile(char * szPdb, SimParams *hparams, float4 *r);
 void PrintRdf(SimParams *hparams, uint *hHistRdf);  // Prints rdf data in a file.
-void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy);
+void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy, float3* ha);
 
 // Random numbers.
 real RandR (SimParams *hparams);
@@ -2181,7 +2181,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     // If needed, make the first coordinate snapshot.
     if( hparams->bPdb != 0 ) {
         CreatePdbFile(szPdbPath, hparams, hr);
-        DumpSpecialForcesAndEnergy(hparams, hr, hspecForcesAndEnergy);
+        DumpSpecialForcesAndEnergy(hparams, hr, hspecForcesAndEnergy, ha);
     }
 
     // Initialize variables for computing one timestep.
@@ -2512,8 +2512,12 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost));
         CreatePdbFile(szPdbPath, hparams, hr);
 
+        // Total forces per atom.
+        gpuErrchk(cudaMemcpy(ha, da, hparams->nMol * sizeof(float3), cudaMemcpyDeviceToHost));
+
+        // Forces from atoms of other types.
         gpuErrchk(cudaMemcpy(hspecForcesAndEnergy, dspecForcesAndEnergy, hparams->nMol * sizeof(float4), cudaMemcpyDeviceToHost));
-        DumpSpecialForcesAndEnergy(hparams, hr, hspecForcesAndEnergy);
+        DumpSpecialForcesAndEnergy(hparams, hr, hspecForcesAndEnergy, ha);
     }
 
     if( hparams->stepCount >= hparams->stepLimit )
@@ -2555,9 +2559,9 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     }   // End while(hparams->moreCycles).
 // End computation of one time step.
 
-    // Print total time.
+    // Print total time to cmd.
     if( hparams->bResult != 0 )
-        fprintf (fResults, "\nDuration of the simulation = %f s", hparams->totalTime);
+        printf ("\nDuration of the simulation = %f s", hparams->totalTime);
     gpuErrchk(cudaEventDestroy(start));
     gpuErrchk(cudaEventDestroy(stop));
 
@@ -2901,7 +2905,7 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     fclose(rdf);
 }
 
-void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy)
+void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy, float3* ha)
 {
     std::string fileName{"forces_"};
     std::stringstream ss;
@@ -2915,12 +2919,13 @@ void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForce
     std::ofstream outFile(fileName);
     if (outFile.is_open())
     {
-        outFile << "id x y z force_x force_y force_z potential_energy\n";
+        outFile << "id x y z force_x force_y force_z potential_energy tot_force_x tot_force_y tot_force_z tot_potential_energy\n";
         for (int idx = 0; idx < hparams->nMol; ++idx)
         {
             std::stringstream fss;
             fss << idx << " " << r[idx].x << " " << r[idx].y << " " << r[idx].z << " " << specForcesAndEnergy[idx].x
-                << " " << specForcesAndEnergy[idx].y << " " << specForcesAndEnergy[idx].z << " " << specForcesAndEnergy[idx].w << "\n";
+                << " " << specForcesAndEnergy[idx].y << " " << specForcesAndEnergy[idx].z << " " << specForcesAndEnergy[idx].w
+                << " " << ha[idx].x << " " << ha[idx].y << " " << ha[idx].z << " " << r[idx].w << "\n";
             outFile << fss.str();
         }
 

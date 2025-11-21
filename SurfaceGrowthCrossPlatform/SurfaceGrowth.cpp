@@ -429,6 +429,9 @@ void PrintParams()
     std::cout << "Material = " << g_hSimParams.iMaterial << std::endl;
     std::cout << "Total atoms = " << g_hSimParams.nMol << std::endl;
     std::cout << "Metal atoms = " << g_hSimParams.nMolMe << std::endl;
+    std::cout << "sigmaLJ = " << g_hSimParams.sigmaLJ << std::endl;
+    std::cout << "epsLJ = " << g_hSimParams.epsLJ << std::endl;
+    std::cout << "rCutLJ = " << g_hSimParams.rCutLJ << std::endl;
 }
 
 // Make preliminary work.
@@ -489,21 +492,21 @@ int SetupJob()
         fprintf(g_fResult,
 TEXT("stepCnt\t impulse\t totEn(eV)\t totEn.rms(eV)\t potEn(eV)\t potEn.rms(eV)\t Tempr(K)\t T.rms(K)\t oneStep(ms)\t Veloc_CM\t CM(angstr)\t friction(nN)\t sizex(angstr)\t sizey(angstr)\t sizez(angstr)\t shearForce(nN)\t"));
 
-        // Print additional values.
+        // Print additional values to cmd.
         if( g_hSimParams.bResult != 0 )
-            fprintf (g_fResult, "time step = %f\t", g_hSimParams.deltaT);
+            printf ("time step = %f\t", g_hSimParams.deltaT);
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == 1) )
-            fprintf (g_fResult, "deposit energy = %f eV\t", g_hDeposEnergy);
+            printf ("deposit energy = %f eV\t", g_hDeposEnergy);
         // Print increment of shear force.
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == 2) )
-            fprintf (g_fResult, "increment of shear = %f pN\t", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
+            printf ("increment of shear = %f pN\t", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime != 0) )
         {
-            fprintf (g_fResult, "epsilonLJ = %f eV\t", g_hSimParams.epsLJ*g_hSimParams.enU);
-            fprintf (g_fResult, "sigmaLJ = %f angstrom", g_hSimParams.sigmaLJ*g_hSimParams.lengthU);
+            printf ("epsilonLJ = %f eV\t", g_hSimParams.epsLJ*g_hSimParams.enU);
+            printf ("sigmaLJ = %f angstrom", g_hSimParams.sigmaLJ*g_hSimParams.lengthU);
         }
         if( g_hSimParams.bResult != 0 )
-            fprintf (g_fResult, "\n");
+            printf ("\n");
     }       // End if(g_bResult).
 
     if(g_hSimParams.iRegime == 2) { // If shear specify diffuse path.
