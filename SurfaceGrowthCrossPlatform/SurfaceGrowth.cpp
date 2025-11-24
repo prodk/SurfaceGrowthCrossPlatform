@@ -34,8 +34,7 @@ bool   gbStartBckup = false;                    // Whether to start from backup 
 int    g_hstepBckup = 10000;                    // How often backup file is created.
 
 // Interface variables.
-char*  g_szRegime[] = {TEXT("Bulk"), TEXT("Surface Growth"), TEXT("Shear")};
-int    giRegime = 2;                            // Regime of simulation, shear by default.
+int    giRegime = SHEAR;                            // Regime of simulation, shear by default.
 
 // Materials.
 char*  g_szMaterial[] = {TEXT("Copper (Cu)"), TEXT("Silver (Ag)"), TEXT("Gold (Au)"),
@@ -228,36 +227,25 @@ int SetParams()
     if(g_hinitUcell.y < 2)
         g_hinitUcell.y = 2;
 
-    // Define number of atoms.
-    if( g_hSimParams.iRegime == 0)      // If bulk then all atoms are metal.
-    {
-        g_hSimParams.nMolMe = 4*g_hinitUcell.x*g_hinitUcell.y*g_hinitUcell.z;
-        g_hSimParams.nMol = g_hSimParams.nMolMe;
-    }
-    else if( g_hSimParams.iRegime != 0) // If surface growth or shear, first nMolMe atoms are Me,
-    {                                   // and from nMolMe to nMol are carbon atoms.
-        g_hSimParams.nMolMe = g_hNmolDeposMe;
-        g_hSimParams.nMol = g_hSimParams.nMolMe + 32*g_hinitUcell.x*g_hinitUcell.y;
-        g_hinitUcell.z = 0;
-    }
+    CalculateNumberOfAtoms();
 
     EamInit();          // Initialize eam parameters.
     GrapheneInit();     // Graphene initialization.
 
     // Define region size.
-    if( g_hSimParams.iRegime == 0)      // If bulk.
+    if( g_hSimParams.iRegime == BULK)      // If bulk.
     {
         VSCopy (g_hregion, 1. / pow ( (g_hSimParams.density*0.25/g_hSimParams.massMe), 1./3.),
             g_hinitUcell);
         VSCopy (g_hSimParams.cells, 1.0 / (g_hSimParams.rCutEam + g_hrNebrShell), g_hregion);
     }
-    else if( g_hSimParams.iRegime != 0) // If surface growth or shear.
+    else if( g_hSimParams.iRegime != BULK) // If surface growth or shear.
     {
         g_hregion.x = g_hinitUcell.x * 8*cos(M_PI / 6.);//*a == 1
         g_hregion.y = g_hinitUcell.y * 6;               //*a == 1
 
         // If surface growth region.z is larger than for shear.
-        if( g_hSimParams.iRegime == 1)
+        if( g_hSimParams.iRegime == SURFACE_GROWTH)
         {
             // Define number of cells under the graphene layer.
             if(g_hSimParams.nMolMe == 0 ) g_hcellShiftZ = 0;    // Num of cells under graphene.
@@ -276,7 +264,7 @@ int SetParams()
         }
 
         // If shear.
-        if( g_hSimParams.iRegime == 2)
+        if( g_hSimParams.iRegime == SHEAR)
         {
             // Define number of cells under the graphene layer.
             if(g_hSimParams.nMolMe == 0 ) g_hcellShiftZ = 0;    // Num of cells under graphene.
@@ -350,7 +338,7 @@ int SetParams()
     g_hSimParams.gammaBerendsen = g_hgammaBerendsen;
 
     // For surface growth stepCool == stepLimit.
-    if(g_hSimParams.iRegime == 1)
+    if(g_hSimParams.iRegime == SURFACE_GROWTH)
         g_hSimParams.stepCool = g_hSimParams.stepLimit;
     else
         g_hSimParams.stepCool = g_hstepCool;
@@ -367,16 +355,16 @@ int SetParams()
     g_hSimParams.stepDeposit = g_hstepDeposit;
     g_hSimParams.nMolToDeposit = g_hnMolToDeposit;
     // If not SG then nMolDeposited == nMolMe.
-    if(g_hSimParams.iRegime == 1)
+    if(g_hSimParams.iRegime == SURFACE_GROWTH)
         g_hSimParams.nMolDeposited = 0;
     else
         g_hSimParams.nMolDeposited = g_hSimParams.nMolMe;
 
     // Magnitude of initial velocities.
-    if( g_hSimParams.iRegime == 0)                      // For metal use mass.
+    if( g_hSimParams.iRegime == BULK)                      // For metal use mass.
         g_hvelMag = sqrt (NDIM * (1. - 1./g_hSimParams.nMol)*
         g_hSimParams.kB*g_hSimParams.temperature/g_hSimParams.massMe);
-    else if( g_hSimParams.iRegime != 0)                 // For carbon mass == 1.
+    else if( g_hSimParams.iRegime != BULK)                 // For carbon mass == 1.
         g_hvelMag = sqrt (NDIM*(1. -1./(g_hSimParams.nMol))
         *g_hSimParams.kB*g_hSimParams.temperature *
         g_hSimParams.nMol/(g_hSimParams.nMol - g_hSimParams.nMolMe));
@@ -461,7 +449,7 @@ int SetupJob()
     if(g_bResult) {
         char szBuf[MAX_PATH];
         // Define file name depending on the regime.
-        if(g_hSimParams.iRegime == 0)   // If bulk.
+        if(g_hSimParams.iRegime == BULK)   // If bulk.
         sprintf(szBuf, TEXT("_blk_x%i_y%i_z%i_Me%i_Av%i_Pdb%i_T%3.0f"),
             g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
             g_hSimParams.initUcell.z,
@@ -469,14 +457,14 @@ int SetupJob()
             g_hSimParams.stepAvg, g_hSimParams.stepPdb, g_hSimParams.temperature
             *g_hSimParams.temperatureU);
 
-        if(g_hSimParams.iRegime == 1)   // If surface growth.
+        if(g_hSimParams.iRegime == SURFACE_GROWTH)   // If surface growth.
             sprintf(szBuf, TEXT("_x%i_y%i_Me%i_Eq%i_Dep%i_TD%i_Pdb%i_T%3.0f"),
             g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
             g_hSimParams.nMolMe, g_hSimParams.stepEquil, g_hSimParams.stepDeposit,
             g_hSimParams.nMolToDeposit, g_hSimParams.stepPdb, g_hSimParams.temperature
             *g_hSimParams.temperatureU);
 
-        if(g_hSimParams.iRegime == 2)   // If shear.
+        if(g_hSimParams.iRegime == SHEAR)   // If shear.
         sprintf(szBuf, TEXT("_sh_x%i_y%i_Me%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f"),
             g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
             g_hSimParams.nMolMe, g_hSimParams.stepEquil, g_hSimParams.stepCool,
@@ -495,12 +483,12 @@ TEXT("stepCnt\t impulse\t totEn(eV)\t totEn.rms(eV)\t potEn(eV)\t potEn.rms(eV)\
         // Print additional values to cmd.
         if( g_hSimParams.bResult != 0 )
             printf ("time step = %f\t", g_hSimParams.deltaT);
-        if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == 1) )
+        if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == SURFACE_GROWTH) )
             printf ("deposit energy = %f eV\t", g_hDeposEnergy);
         // Print increment of shear force.
-        if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == 2) )
+        if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == SHEAR) )
             printf ("increment of shear = %f pN\t", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
-        if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime != 0) )
+        if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime != BULK) )
         {
             printf ("epsilonLJ = %f eV\t", g_hSimParams.epsLJ*g_hSimParams.enU);
             printf ("sigmaLJ = %f angstrom", g_hSimParams.sigmaLJ*g_hSimParams.lengthU);
@@ -509,7 +497,7 @@ TEXT("stepCnt\t impulse\t totEn(eV)\t totEn.rms(eV)\t potEn(eV)\t potEn.rms(eV)\
             printf ("\n");
     }       // End if(g_bResult).
 
-    if(g_hSimParams.iRegime == 2) { // If shear specify diffuse path.
+    if(g_hSimParams.iRegime == SHEAR) { // If shear specify diffuse path.
         lstrcpy(g_hSimParams.szDiffusePath, TEXT("Diffuse.txt"));
     }
 
@@ -584,6 +572,21 @@ void GrapheneInit()
     g_hSimParams.rrCutLJ = g_hSimParams.rCutLJ*g_hSimParams.rCutLJ;
 }
 
+void CalculateNumberOfAtoms()
+{
+    if (g_hSimParams.iRegime == BULK)      // If bulk then all atoms are metal.
+    {
+        g_hSimParams.nMolMe = 4 * g_hinitUcell.x * g_hinitUcell.y * g_hinitUcell.z;
+        g_hSimParams.nMol = g_hSimParams.nMolMe;
+    }
+    else if (g_hSimParams.iRegime != BULK) // If surface growth or shear, first nMolMe atoms are Me,
+    {                                   // and from nMolMe to nMol are carbon atoms.
+        g_hSimParams.nMolMe = g_hNmolDeposMe;
+        g_hSimParams.nMol = g_hSimParams.nMolMe + 32 * g_hinitUcell.x * g_hinitUcell.y;
+        g_hinitUcell.z = 0;
+    }
+}
+
 // Code for generation of random numbers (from Rapaport).
 void InitRand (int randSeedI, SimParams *hparams)
 {
@@ -631,8 +634,9 @@ void InitVels ()
 
     VZero (g_hvSum);
     for(n = 0; n < g_hSimParams.nMol; n++) {
+        ///@todo: reconsider
         // For surface growth and shear, metal atoms have zero initial velocity.
-        if( (g_hSimParams.iRegime != 0) && (n < g_hSimParams.nMolMe) ) {// For metal.
+        if( (g_hSimParams.iRegime != BULK) && (n < g_hSimParams.nMolMe) ) {// For metal.
             g_hv[n].x = 0.;
             g_hv[n].y = 0.;
             g_hv[n].z = 0.;
@@ -650,10 +654,10 @@ void InitVels ()
     }
     // Shift velocities to provide zero total impulse.
     for(n = 0; n < g_hSimParams.nMol; n++) {
-        if( g_hSimParams.iRegime == 0)
+        if( g_hSimParams.iRegime == BULK)
             VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol), g_hvSum);
         else if(n >= g_hSimParams.nMolMe)
-            VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol /*- g_hSimParams.nMolMe*/), g_hvSum);
+            VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol /*- g_hSimParams.nMolMe*/), g_hvSum);///@todo: reconsider
     }
 }
 

@@ -134,7 +134,7 @@ struct SimParams
     int     stepThermostat; // how often thermostat is applied
     real    gammaBerendsen; // friction coefficient
     int     stepCool;       // how long thermostat is applied to metal atoms after stepEquil steps
-    // regime (bulk == 0, surface growth == 1, shear == 2)
+    // regime (bulk == 0, surface growth == 1, shear == 2, contact mechanics == 3)
     int     iRegime;
     // Lennard-Jones parameters for metal-substrate interactions
     real    sigmaLJ, epsLJ, rCutLJ, rrCutLJ;
@@ -220,6 +220,12 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort =
         if (abort) exit(code);
     }
 }
+
+constexpr const char* const g_szRegime[] = { TEXT("Bulk"), TEXT("Surface Growth"), TEXT("Shear"), TEXT("Contact Mechanics") };
+constexpr int BULK = 0;
+constexpr int SURFACE_GROWTH = 1;
+constexpr int SHEAR = 2;
+constexpr int CONTACT_MECHANICS = 3;
 
 // prototypes of wrappers implemented in SurfaceGrowth.cu
 extern "C"

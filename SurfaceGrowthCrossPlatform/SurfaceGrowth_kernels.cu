@@ -495,8 +495,10 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
         dv[n].y = beta * dv[n].y;
         dv[n].z = beta * dv[n].z;
     }
+
+    ///@todo: this can be done on CPU outside the kernel
     // For metal atoms.
-    if ( (dparams.iRegime == 2)&&(n < dparams.nMolMe)&&
+    if ( (dparams.iRegime == SHEAR) && (n < dparams.nMolMe)&&
         (stepCount > dparams.stepEquil) &&       // This is redundant.
         (stepCount < dparams.stepEquil + dparams.stepCool) )
     {
@@ -1268,10 +1270,10 @@ __global__ void ComputeVvSumK( float3 *dv,  // array of velocities
 
     // If metal subtract velocity of center of mass,
     // here not threadIdx, but index of molecule!
-    if( (dparams.iRegime == 2) && ( (2*blockIdx.x*blockDim.x + t) < dparams.nMolMe ) )
+    if( (dparams.iRegime == SHEAR) && ( (2*blockIdx.x*blockDim.x + t) < dparams.nMolMe ) )
         partialSum[t].x = partialSum[t].x - cmVelX;
 
-    if( (dparams.iRegime == 2) && ( ( (2*blockIdx.x+1)*blockDim.x + t) < dparams.nMolMe ) )
+    if( (dparams.iRegime == SHEAR) && ( ( (2*blockIdx.x+1)*blockDim.x + t) < dparams.nMolMe ) )
         partialSum[blockDim.x+t].x = partialSum[blockDim.x+t].x - cmVelX;
 
     // Find square of velocity and store it in .x component.
@@ -2065,7 +2067,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     TBuf *tBuf = nullptr;
     real *rrDiffuseAv = nullptr;
     FILE *fileDiffuse = NULL;
-    if(hparams->iRegime == 2)   // If shear, then measure diffusion.
+    ///@todo: add more criteria to measure diffusion, e.g. nBUffDIffuse is non-0
+    if(hparams->iRegime == SHEAR)   // If shear, then measure diffusion.
     {
         AllocMem(tBuf, hparams->nBuffDiffuse, TBuf);
         AllocMem(rrDiffuseAv, hparams->nValDiffuse, real);
@@ -2158,7 +2161,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
     gpuErrchk(cudaMalloc(&dspecForcesAndEnergy, hparams->nMol * sizeof(float4)));
 
-    if( (hparams->iRegime != 0) && (hparams->nMolMe != 0) ) // Allocate memory for friction force.
+    if( (hparams->iRegime != BULK) && (hparams->nMolMe != 0) ) // Allocate memory for friction force.
         gpuErrchk(cudaMalloc(&dcarbonForce, hparams->nMolMe * sizeof(real)));
 
     // If needed allocate memory for rdf.
@@ -2201,13 +2204,13 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
 // Code for insertion of atoms (for surface growth regime).
     // Before equilibration atoms are not deposited.
-    if( (hparams->iRegime == 1) && (hparams->stepCount <= hparams->stepEquil) )
+    if( (hparams->iRegime == SURFACE_GROWTH) && (hparams->stepCount <= hparams->stepEquil) )
     {
         int nMolToDeposit = 0;
         InsertAtomsK<<< dimGrid, dimBlock >>>
             ( dr, dv, hparams->nMolDeposited, nMolToDeposit );
     }
-    if( (hparams->iRegime == 1) && (hparams->stepCount > hparams->stepEquil) )
+    if( (hparams->iRegime == SURFACE_GROWTH) && (hparams->stepCount > hparams->stepEquil) )
     {
         if(hparams->nMolDeposited < hparams->nMolMe)
         {
@@ -2347,7 +2350,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             hparams->particleSize.z = particleSize.z;
 
             // Calculate diffusion if shear regime.
-            if(hparams->iRegime == 2) {
+            if(hparams->iRegime == SHEAR) {
                 if( (hparams->stepCount > hparams->stepEquil) &&
                     ( (hparams->stepCount - hparams->stepEquil) % hparams->stepDiffuse == 0) )
                 {
@@ -2428,13 +2431,13 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         // Apply Berendsen thermostat,
         // for shear apply thermostat to all atoms after stepEquil,
         // for metal only during step cool, for carbon - till the end.
-        if( (hparams->iRegime == 2) && (hparams->stepCount > hparams->stepEquil)
+        if( (hparams->iRegime == SHEAR) && (hparams->stepCount > hparams->stepEquil)
             && (hparams->stepCount % hparams->stepThermostat == 0))
             ApplyBerendsenThermostat<<< dimGrid, dimBlock >>>
             ( dv, &hlpArray[0].x, hparams->stepCount ); // If step > cool Me is not thermostatted.
 
         // For SG apply thermostat to carbon atoms during all simulation.
-        if( (hparams->iRegime == 1) && (hparams->stepCount % hparams->stepThermostat == 0))
+        if( (hparams->iRegime == SURFACE_GROWTH) && (hparams->stepCount % hparams->stepThermostat == 0))
             ApplyBerendsenThermostat<<< dimGrid, dimBlock >>>
             ( dv, &hlpArray[0].x, hparams->stepCount );
 
@@ -2458,7 +2461,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         VCopy(hparams->vSum, vSum); // Copy impulse.
 
 // Begin apply shear.
-    if( (hparams->iRegime == 2) && (hparams->nMolMe != 0) )
+    if( (hparams->iRegime == SHEAR) && (hparams->nMolMe != 0) )
     {
         if( hparams->stepCount > (hparams->stepEquil + hparams->stepCool) )
         {
@@ -2590,7 +2593,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     if( (hparams->bRdf != 0) && (hHistRdf != 0) )
         free(hHistRdf);
     // Free buffers for diffusion.
-    if(hparams->iRegime == 2) {
+    if(hparams->iRegime == SHEAR) {
         for(nb = 0; nb < hparams->nBuffDiffuse; nb++)
             if(tBuf[nb].rrDiffuse) free(tBuf[nb].rrDiffuse);
     }
@@ -2607,7 +2610,7 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
 {
     int i;
     gpuErrchk(cudaMalloc(&dr, hparams->nMol * sizeof(float4)));    // Allocate device memory.
-    if(hparams->iRegime == 0)   // If bulk, then only fcc lattice.
+    if(hparams->iRegime == BULK)   // If bulk, then only fcc lattice.
     {
         uint max, middle, min;  // Numbers of unit cells.
         max = hparams->initUcell.x;
@@ -2624,7 +2627,7 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
         // Copy memory from device to host.
         gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol*sizeof(float4), cudaMemcpyDeviceToHost));
     }
-    else if( hparams->iRegime == 1) // If surface growth, generate random Me coordinates for Me.
+    else if( hparams->iRegime == SURFACE_GROWTH) // If surface growth, generate random Me coordinates for Me.
     {
         dim3 dimBlockCarbon(32, 1, 1);
         int numBlocks = (hparams->nMol-hparams->nMolMe) / dimBlockCarbon.x;
@@ -2643,7 +2646,7 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
             hr[i].w = 0.f;
         }
     }
-    else if( hparams->iRegime == 2) // If shear, use slab coords for metal.
+    else if( hparams->iRegime == SHEAR) // If shear, use slab coords for metal.
     {
         dim3 dimBlockCarbon(32, 1, 1);
         int numBlocks = (hparams->nMol-hparams->nMolMe) / dimBlockCarbon.x;
@@ -2846,7 +2849,7 @@ int CreatePdbFile(char *szPdb, SimParams *hparams, float4 *r)
                     r[i].y);            // Orthogonal coordinates for Y
                                         // in Angstroms                 39 - 46
         // for SG print smaller coordinate for non deposited atoms
-        if( (hparams->iRegime == 1) && (i < hparams->nMolMe) && (i >= hparams->nMolDeposited) )
+        if( (hparams->iRegime == SURFACE_GROWTH) && (i < hparams->nMolMe) && (i >= hparams->nMolDeposited) )
             fprintf(pdb, "%-8.2lf", 1.42 * 2*
             hparams->region.z  );   // Orthogonal coordinates for Z
                                         // in Angstroms                 47 - 54
