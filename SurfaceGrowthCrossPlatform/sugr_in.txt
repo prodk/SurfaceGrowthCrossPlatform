@@ -10,7 +10,7 @@
 
 # time parameters
 
-10000        # step limit					10
+200000        # step limit					10
 0.001       # time step						11
 250         # averaging						12
 30000       # equilibration					13
@@ -31,3 +31,9 @@
 50          # compute rdf after this number of steps		20
 0           # create backup, 0 - no, 1 - yes			21
 0           # start from backup					22
+
+# contact mechanics
+3           # metal unit cells in x	        23
+3           # metal unit cells in y         24
+3           # metal unit cells in z         25
+0.1         # substrate extrusion, e.g. substrate width = metal_slab_width * (1 + extrusion) 26

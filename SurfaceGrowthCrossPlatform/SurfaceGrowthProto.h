@@ -27,6 +27,7 @@ void EamInit();
 void GrapheneInit();
 
 void CalculateNumberOfAtoms();
+void CalculateRegionSize();
 
 // Array of structures with data for materials (metals) (from Zhou et al.).
 // Order is important: Cu(0), Ag(1), Au(2), Ni(3), Al(4), Pb(5)

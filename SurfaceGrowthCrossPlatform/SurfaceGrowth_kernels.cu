@@ -316,6 +316,7 @@ __global__ void InitSlabCoordsK( float4 *pos )
         {
             pos[n].x = c.x;
             pos[n].y = c.y + shiftY;
+            ///@todo: use the LJ distance 1.1*sigma instead of 0.5f*dparams.a
             pos[n].z = c.z + 0.5f*dparams.a + dparams.cellShiftZ/dparams.invWidth.z;
             pos[n].w = 0.0f;
             if (j != 3) {
@@ -2564,7 +2565,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
     // Print total time to cmd.
     if( hparams->bResult != 0 )
-        printf ("\nDuration of the simulation = %f s", hparams->totalTime);
+        printf ("\nDuration of the simulation = %f s\n", hparams->totalTime);
     gpuErrchk(cudaEventDestroy(start));
     gpuErrchk(cudaEventDestroy(stop));
 
@@ -2770,7 +2771,7 @@ void PrintSummary (FILE *fp, SimParams *hparams)
 
     // Print values in the file.
     fprintf (fp,
-        "%5d\t %7.7f\t %7.7f\t %7.7f\t %7.7f\t %7.7f\t %7.7f\t %7.7f\t %7.7f\t",
+        "%5d %7.7f %7.7f %7.7f %7.7f %7.7f %7.7f %7.7f %7.7f ",
         hparams->stepCount, VCSum (hparams->vSum) / hparams->nMol,
         totEn,   totEnRms,
         potEn,   potEnRms,
@@ -2788,7 +2789,7 @@ void PrintSummary (FILE *fp, SimParams *hparams)
     totalShear = hparams->totalShear / hparams->forceU;
 
     fprintf (fp,
-        "%7.7f\t %7.7f\t %7.6f\t %7.7f\t %7.7f\t %7.7f\t %7.7f\n",
+        "%7.7f %7.7f %7.6f %7.7f %7.7f %7.7f %7.7f\n",
         hparams->cmVel.sum, centerOfMass, frictForce, xParticleSize, yParticleSize,
         zParticleSize, totalShear);
 
@@ -2902,7 +2903,7 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     {
         rb = (n + 0.5f)*hparams->rangeRdf*hparams->lengthU / hparams->sizeHistRdf;
         histRdf = (real) hHistRdf[n]*normFac / ((n - 0.5f)*(n - 0.5f));
-        fprintf(rdf, TEXT("%8.4f\t %8.4f\n"), rb, histRdf);
+        fprintf(rdf, TEXT("%8.4f %8.4f\n"), rb, histRdf);
     }
 
     fclose(rdf);

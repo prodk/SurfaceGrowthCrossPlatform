@@ -87,6 +87,10 @@ int g_hstepDiffuse = 100;
 int g_hlimitDiffuseAv = 20;
 int g_hcountDiffuseAv = 0;
 
+// Contact mechanics.
+uint3 g_unitCellMe;          // Number of unit cells in each direction for the metal slab.
+real g_extrusion{ 0.0f };    // Substrate extrusion (same for all the directions), e.g. substrate width = metal_slab_width * (1 + extrusion)
+
 // Host variables.
 float3  g_hvSum;                           // Total impulse.
 SimParams g_hSimParams;                    // Is used for communication between UI and wrappers (and kernels).
@@ -227,63 +231,12 @@ int SetParams()
     if(g_hinitUcell.y < 2)
         g_hinitUcell.y = 2;
 
-    CalculateNumberOfAtoms();
-
     EamInit();          // Initialize eam parameters.
     GrapheneInit();     // Graphene initialization.
 
-    // Define region size.
-    if( g_hSimParams.iRegime == BULK)      // If bulk.
-    {
-        VSCopy (g_hregion, 1. / pow ( (g_hSimParams.density*0.25/g_hSimParams.massMe), 1./3.),
-            g_hinitUcell);
-        VSCopy (g_hSimParams.cells, 1.0 / (g_hSimParams.rCutEam + g_hrNebrShell), g_hregion);
-    }
-    else if( g_hSimParams.iRegime != BULK) // If surface growth or shear.
-    {
-        g_hregion.x = g_hinitUcell.x * 8*cos(M_PI / 6.);//*a == 1
-        g_hregion.y = g_hinitUcell.y * 6;               //*a == 1
+    CalculateNumberOfAtoms(); // Must be called after EamInit() to have valid g_hSimParams.a
 
-        // If surface growth region.z is larger than for shear.
-        if( g_hSimParams.iRegime == SURFACE_GROWTH)
-        {
-            // Define number of cells under the graphene layer.
-            if(g_hSimParams.nMolMe == 0 ) g_hcellShiftZ = 0;    // Num of cells under graphene.
-            if((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100) ) g_hcellShiftZ = 1;
-            if((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 5000) ) g_hcellShiftZ = 2;
-            if((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 3;
-            if((g_hSimParams.nMolMe >= 10000)&& (g_hSimParams.nMolMe < 20000) ) g_hcellShiftZ = 4;
-            if(g_hSimParams.nMolMe >= 20000 ) g_hcellShiftZ = 5;
-
-            // region.z = 1.8*height of the cube + a + number of cells under graphene.
-            if(g_hSimParams.nMolMe != 0)
-                g_hregion.z = 1.8*g_hSimParams.a*pow((0.25*g_hSimParams.nMolMe),0.33333333333) +
-                g_hSimParams.a + g_hcellShiftZ*(g_hSimParams.rCutEam + g_hrNebrShell);
-            else    // If no metal atoms, then simply several cells.
-                g_hregion.z = 3*(g_hSimParams.rCutEam + g_hrNebrShell);
-        }
-
-        // If shear.
-        if( g_hSimParams.iRegime == SHEAR)
-        {
-            // Define number of cells under the graphene layer.
-            if(g_hSimParams.nMolMe == 0 ) g_hcellShiftZ = 0;    // Num of cells under graphene.
-            if((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100) ) g_hcellShiftZ = 1;
-            if((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000) ) g_hcellShiftZ = 2;
-            if((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000) ) g_hcellShiftZ = 3;
-            if((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 5;
-            if((g_hSimParams.nMolMe >= 10000)&& (g_hSimParams.nMolMe < 20000) ) g_hcellShiftZ = 7;
-            if(g_hSimParams.nMolMe >= 20000 ) g_hcellShiftZ = 9;
-
-            // region.z = height of the cube + 3.6*a + number of cells under graphene.
-            if(g_hSimParams.nMolMe != 0)
-                g_hregion.z = g_hSimParams.a*pow((0.25*g_hSimParams.nMolMe),0.33333333333) +
-                3.6*g_hSimParams.a + g_hcellShiftZ*(g_hSimParams.rCutEam + g_hrNebrShell);
-            else    // If no metal atoms, then simply several cells.
-                g_hregion.z = 3*(g_hSimParams.rCutEam + g_hrNebrShell);
-        }
-        VSCopy (g_hSimParams.cells, 1.0 / (g_hSimParams.rCutEam + g_hrNebrShell), g_hregion);
-    }
+    CalculateRegionSize();
 
     // Save data in SimParams structure.
     VCopy(g_hSimParams.initUcell, g_hinitUcell);
@@ -478,20 +431,20 @@ int SetupJob()
 
         g_fResult = fopen(g_szResult, TEXT("w"));
         fprintf(g_fResult,
-TEXT("stepCnt\t impulse\t totEn(eV)\t totEn.rms(eV)\t potEn(eV)\t potEn.rms(eV)\t Tempr(K)\t T.rms(K)\t oneStep(ms)\t Veloc_CM\t CM(angstr)\t friction(nN)\t sizex(angstr)\t sizey(angstr)\t sizez(angstr)\t shearForce(nN)\t"));
+TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T.rms(K) oneStep(ms) Veloc_CM CM(angstr) friction(nN) sizex(angstr) sizey(angstr) sizez(angstr) shearForce(nN) \n"));
 
         // Print additional values to cmd.
         if( g_hSimParams.bResult != 0 )
-            printf ("time step = %f\t", g_hSimParams.deltaT);
+            printf ("time step = %f, ", g_hSimParams.deltaT);
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == SURFACE_GROWTH) )
-            printf ("deposit energy = %f eV\t", g_hDeposEnergy);
+            printf ("deposit energy = %f eV, ", g_hDeposEnergy);
         // Print increment of shear force.
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == SHEAR) )
-            printf ("increment of shear = %f pN\t", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
+            printf ("increment of shear = %f pN, ", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime != BULK) )
         {
-            printf ("epsilonLJ = %f eV\t", g_hSimParams.epsLJ*g_hSimParams.enU);
-            printf ("sigmaLJ = %f angstrom", g_hSimParams.sigmaLJ*g_hSimParams.lengthU);
+            printf ("epsilonLJ = %f eV, ", g_hSimParams.epsLJ*g_hSimParams.enU);
+            printf ("sigmaLJ = %f angstrom, ", g_hSimParams.sigmaLJ*g_hSimParams.lengthU);
         }
         if( g_hSimParams.bResult != 0 )
             printf ("\n");
@@ -570,6 +523,7 @@ void GrapheneInit()
     g_hSimParams.sigmaLJ = g_hsigma / g_ha0;                        // 2.4945 angstrom
     g_hSimParams.rCutLJ = 2.5*g_hSimParams.sigmaLJ;
     g_hSimParams.rrCutLJ = g_hSimParams.rCutLJ*g_hSimParams.rCutLJ;
+    g_hSimParams.initSlabHeight = 1.12 * g_hSimParams.sigmaLJ;      // Initial height == the LJ energy minimum distance
 }
 
 void CalculateNumberOfAtoms()
@@ -579,11 +533,98 @@ void CalculateNumberOfAtoms()
         g_hSimParams.nMolMe = 4 * g_hinitUcell.x * g_hinitUcell.y * g_hinitUcell.z;
         g_hSimParams.nMol = g_hSimParams.nMolMe;
     }
-    else if (g_hSimParams.iRegime != BULK) // If surface growth or shear, first nMolMe atoms are Me,
-    {                                   // and from nMolMe to nMol are carbon atoms.
+    // If surface growth or shear, first nMolMe atoms are Me, from nMolMe to nMol are carbon atoms.
+    else if (g_hSimParams.iRegime == SURFACE_GROWTH || g_hSimParams.iRegime == SHEAR)
+    {
         g_hSimParams.nMolMe = g_hNmolDeposMe;
         g_hSimParams.nMol = g_hSimParams.nMolMe + 32 * g_hinitUcell.x * g_hinitUcell.y;
         g_hinitUcell.z = 0;
+    }
+    else if (g_hSimParams.iRegime == CONTACT_MECHANICS)
+    {
+        // Metal atoms are arranged in a FCC prysm (4 atoms per unit cell).
+        g_hSimParams.nMolMe = 4 * g_unitCellMe.x * g_unitCellMe.y * g_unitCellMe.z;
+
+        const auto dx_me = g_unitCellMe.x * g_hSimParams.a;
+        const auto dy_me = g_unitCellMe.y * g_hSimParams.a;
+        const auto dz_me = g_unitCellMe.z * g_hSimParams.a;
+
+        constexpr real cos30 = 0.8660254038f;
+        g_hinitUcell.x = ceil(dx_me * (1. + g_extrusion) / (8. * cos30)); // Carbon covalent bond length is 1.0 dimensionless.
+        g_hinitUcell.y = ceil(dy_me * (1. + g_extrusion) / 6.); // Carbon covalent bond length is 1.0 dimensionless.
+        g_hinitUcell.z = 0;
+
+        g_hSimParams.nMol = g_hSimParams.nMolMe + 32 * g_hinitUcell.x * g_hinitUcell.y;
+    }
+}
+
+void CalculateRegionSize()
+{
+    if (g_hSimParams.iRegime == BULK)      // If bulk.
+    {
+        VSCopy(g_hregion, 1. / pow((g_hSimParams.density * 0.25 / g_hSimParams.massMe), 1. / 3.),
+            g_hinitUcell);
+        VSCopy(g_hSimParams.cells, 1.0 / (g_hSimParams.rCutEam + g_hrNebrShell), g_hregion);
+    }
+    else if (g_hSimParams.iRegime != BULK) // If surface growth/shear/contact mechanics.
+    {
+        g_hregion.x = g_hinitUcell.x * 8 * cos(M_PI / 6.);//*a == 1
+        g_hregion.y = g_hinitUcell.y * 6;               //*a == 1
+
+        // If surface growth region.z is larger than for shear.
+        if (g_hSimParams.iRegime == SURFACE_GROWTH)
+        {
+            // Define number of cells under the graphene layer.
+            if (g_hSimParams.nMolMe == 0) g_hcellShiftZ = 0;    // Num of cells under graphene.
+            if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
+            if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 2;
+            if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 3;
+            if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 4;
+            if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 5;
+
+            // region.z = 1.8*height of the cube + a + number of cells under graphene.
+            if (g_hSimParams.nMolMe != 0)
+                g_hregion.z = 1.8 * g_hSimParams.a * pow((0.25 * g_hSimParams.nMolMe), 0.33333333333) +
+                g_hSimParams.a + g_hcellShiftZ * (g_hSimParams.rCutEam + g_hrNebrShell);
+            else    // If no metal atoms, then simply several cells.
+                g_hregion.z = 3 * (g_hSimParams.rCutEam + g_hrNebrShell);
+        }
+        // If shear.
+        else if (g_hSimParams.iRegime == SHEAR)
+        {
+            // Define number of cells under the graphene layer.
+            if (g_hSimParams.nMolMe == 0) g_hcellShiftZ = 0;    // Num of cells under graphene.
+            if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
+            if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 2;
+            if ((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 3;
+            if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 5;
+            if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 7;
+            if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 9;
+
+            // region.z = height of the cube + 3.6*a + number of cells under graphene.
+            if (g_hSimParams.nMolMe != 0)
+                g_hregion.z = g_hSimParams.a * pow((0.25 * g_hSimParams.nMolMe), 0.33333333333) +
+                3.6 * g_hSimParams.a + g_hcellShiftZ * (g_hSimParams.rCutEam + g_hrNebrShell);
+            else    // If no metal atoms, then simply several cells.
+                g_hregion.z = 3 * (g_hSimParams.rCutEam + g_hrNebrShell);
+        }
+        else if (g_hSimParams.iRegime == CONTACT_MECHANICS)
+        {
+            // Define number of cells under the graphene layer.
+            ///@todo: play around with these numbers:
+            if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
+            if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 2;
+            if ((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 3;
+            if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 5;
+            if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 7;
+            if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 9;
+
+            // region.z = height of the slab * (1 + P) + initialHeight + number of cells under graphene.
+            g_hregion.z = g_unitCellMe.z * g_hSimParams.a * (1. + g_extrusion) + g_hSimParams.initSlabHeight
+                + g_hcellShiftZ * (g_hSimParams.rCutEam + g_hrNebrShell);
+        }
+
+        VSCopy(g_hSimParams.cells, 1.0 / (g_hSimParams.rCutEam + g_hrNebrShell), g_hregion);
     }
 }
 
@@ -827,6 +868,22 @@ bool ReadInputFile(char *szInpFile)
 
                 case 22:
                     gbStartBckup = atoi(szTmp); // Whether to start from backup file.
+                    break;
+
+                case 23:
+                    g_unitCellMe.x = atoi(szTmp); // Metal cells count in x direction.
+                    break;
+
+                case 24:
+                    g_unitCellMe.y = atoi(szTmp); // Metal cells count in y direction.
+                    break;
+
+                case 25:
+                    g_unitCellMe.z = atoi(szTmp); // Metal cells count in z direction.
+                    break;
+
+                case 26:
+                    g_extrusion = atof(szTmp); // Substrate extrusion.
                     break;
 
             } // End switch row count.

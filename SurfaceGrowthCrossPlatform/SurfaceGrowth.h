@@ -156,6 +156,7 @@ struct SimParams
     // number of metal cells (in shear mode)
     int     initUcellMeX;
     int     initUcellMeY;
+    real    initSlabHeight; // Initial height of the metal slab above the sheet.
     // rdf variables
     real    rangeRdf;           // maximum distance between atoms for rdf
     int     limitRdf;           // number of measurements
