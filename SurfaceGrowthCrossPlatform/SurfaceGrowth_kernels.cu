@@ -2771,7 +2771,7 @@ void PrintSummary (FILE *fp, SimParams *hparams)
 
     // Print values in the file.
     fprintf (fp,
-        "%5d %7.7f %7.7f %7.7f %7.7f %7.7f %7.7f %7.7f %7.7f ",
+        "%d %-.7f %-.7f %-.7f %-.7f %-.7f %-.7f %-.7f %-.7f ",
         hparams->stepCount, VCSum (hparams->vSum) / hparams->nMol,
         totEn,   totEnRms,
         potEn,   potEnRms,
@@ -2789,7 +2789,7 @@ void PrintSummary (FILE *fp, SimParams *hparams)
     totalShear = hparams->totalShear / hparams->forceU;
 
     fprintf (fp,
-        "%7.7f %7.7f %7.6f %7.7f %7.7f %7.7f %7.7f\n",
+        "%-.7f %-.7f %-.6f %-.7f %-.7f %-.7f %-.7f\n",
         hparams->cmVel.sum, centerOfMass, frictForce, xParticleSize, yParticleSize,
         zParticleSize, totalShear);
 
@@ -2802,7 +2802,7 @@ int CreatePdbFile(char *szPdb, SimParams *hparams, float4 *r)
     int i{0};
     int n = 0;
     real m{0.f};
-    char szFileName[MAX_PATH],szBuf[MAX_PATH];
+    char szBuf[MAX_PATH];
 
     ZeroMemory(szBuf, MAX_PATH);
 
@@ -2816,10 +2816,13 @@ int CreatePdbFile(char *szPdb, SimParams *hparams, float4 *r)
         sprintf(szBuf, TEXT("_%-4i"), i);
 
     lstrcat(szBuf, TEXT(".pdb"));
-    lstrcpy(szFileName, szPdb);
-    lstrcat(szFileName, szBuf);
 
-    FILE *pdb = fopen(szFileName, "w");     // Use standard function to open the file.
+    std::string fileName{ szPdb };
+    fileName += std::string(szBuf);
+    std::filesystem::path filePath{ "pdb/" + fileName };
+    std::filesystem::create_directories(filePath.parent_path());
+
+    FILE *pdb = fopen(filePath.string().c_str(), "w");     // Use standard function to open the file.
     if( !pdb ){
         return 0;
     }
@@ -2903,7 +2906,7 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     {
         rb = (n + 0.5f)*hparams->rangeRdf*hparams->lengthU / hparams->sizeHistRdf;
         histRdf = (real) hHistRdf[n]*normFac / ((n - 0.5f)*(n - 0.5f));
-        fprintf(rdf, TEXT("%8.4f %8.4f\n"), rb, histRdf);
+        fprintf(rdf, TEXT("%-.7f %-.7f\n"), rb, histRdf);
     }
 
     fclose(rdf);
@@ -2911,16 +2914,15 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
 
 void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy, float3* ha)
 {
-    std::string fileName{"forces_"};
-    std::stringstream ss;
-
     const auto fileNumber = hparams->stepCount / hparams->stepPdb;
 
+    std::stringstream ss;
     ss << fileNumber << "_step_" << hparams->stepCount << ".txt";
 
-    fileName += ss.str();
+    std::filesystem::path filePath{ "forces/forces_" + ss.str() };
+    std::filesystem::create_directories(filePath.parent_path());
 
-    std::ofstream outFile(fileName);
+    std::ofstream outFile(filePath);
     if (outFile.is_open())
     {
         outFile << "id x y z force_x force_y force_z potential_energy tot_force_x tot_force_y tot_force_z tot_potential_energy\n";
@@ -2937,7 +2939,7 @@ void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForce
     }
     else
     {
-        std::cerr << "Failed to open special forces file: " << fileName << std::endl;
+        std::cerr << "Failed to open special forces file: " << filePath << std::endl;
     }
 }
 

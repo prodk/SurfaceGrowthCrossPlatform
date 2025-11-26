@@ -8,7 +8,7 @@
 
 #include "SurfaceGrowth.h"      // Contains necessary CUDA and other headers and wrappers.
 
-bool ReadInputFile(char *szInpFile);
+bool ReadInputFile(const char *szInpFile);
 // Computational functions that are invoked on host.
 void AllocArrays ();
 void FreeArrays ();

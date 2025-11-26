@@ -12,9 +12,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <fstream>
 #include <sstream>
 #include <string>
 
@@ -198,7 +199,7 @@ TBuf;
 typedef struct _MATERIAL
 {
     // EAM parameters
-    char*   szName;
+    const char*   szName;
     real    re;             // distance between nearest neighbors = a / sqrt(2), angstrom
     real    fe;             // for rho
     real    rhoe;

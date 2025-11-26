@@ -15,7 +15,7 @@ char*  g_szCmdLine;                            // Command line for CudaInitW.
 
 // File variables.
 // Beginning of the file names.
-char   g_szResult[MAX_PATH] = TEXT("sg"),
+char   g_szResult[MAX_PATH] = TEXT(""),
         g_szPdb[MAX_PATH] = TEXT("sugr"),
         g_szRdf[MAX_PATH] = TEXT("rdf");
 FILE*   g_fResult = NULL;                       // Output file descriptor.
@@ -25,10 +25,10 @@ bool    g_bResult = true;                       // Whether to create the output 
 bool    g_bPdb = true;
 bool    g_bRdf = true;
 
-char *g_szInpFile = TEXT("sugr_in.txt");       // Input file.
+const char *g_szInpFile = TEXT("sugr_in.txt");       // Input file.
 
 // Backup variables.
-char*  gszBckup[] = {TEXT("bckup0.sugr"),TEXT("bckup1.sugr")};// Note 2 backup files.
+const char*  gszBckup[] = {TEXT("bckup0.sugr"),TEXT("bckup1.sugr")};// Note 2 backup files.
 bool   gbBckup = false;                         // Whether to use backup.
 bool   gbStartBckup = false;                    // Whether to start from backup file.
 int    g_hstepBckup = 10000;                    // How often backup file is created.
@@ -37,8 +37,8 @@ int    g_hstepBckup = 10000;                    // How often backup file is crea
 int    giRegime = SHEAR;                            // Regime of simulation, shear by default.
 
 // Materials.
-char*  g_szMaterial[] = {TEXT("Copper (Cu)"), TEXT("Silver (Ag)"), TEXT("Gold (Au)"),
-                          TEXT("Nickel (Ni)"), TEXT("Aluminium (Al)"), TEXT("Lead (Pb)")};      // materials
+const char*  g_szMaterial[] = {TEXT("Copper (Cu)"), TEXT("Silver (Ag)"), TEXT("Gold (Au)"),
+                               TEXT("Nickel (Ni)"), TEXT("Aluminium (Al)"), TEXT("Lead (Pb)")};      // materials
 int    giMaterial = 3;         // Index of a material in the array of structures, Ni default.
 
 // Many globals are taken from the input file, they provide communications
@@ -373,6 +373,9 @@ void PrintParams()
     std::cout << "sigmaLJ = " << g_hSimParams.sigmaLJ << std::endl;
     std::cout << "epsLJ = " << g_hSimParams.epsLJ << std::endl;
     std::cout << "rCutLJ = " << g_hSimParams.rCutLJ << std::endl;
+    std::cout << "stepLimit = " << g_hSimParams.stepLimit << std::endl;
+    std::cout << "stepEquil = " << g_hSimParams.stepEquil << std::endl;
+    std::cout << "stepCool = " << g_hSimParams.stepCool << std::endl;
 }
 
 // Make preliminary work.
@@ -403,29 +406,34 @@ int SetupJob()
         char szBuf[MAX_PATH];
         // Define file name depending on the regime.
         if(g_hSimParams.iRegime == BULK)   // If bulk.
-        sprintf(szBuf, TEXT("_blk_x%i_y%i_z%i_Me%i_Av%i_Pdb%i_T%3.0f"),
-            g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
+        sprintf(szBuf, TEXT("blk_%s_x%i_y%i_z%i_Me%i_Av%i_Pdb%i_T%3.0f"),
+            g_hSimParams.szNameMe, g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
             g_hSimParams.initUcell.z,
             g_hSimParams.nMolMe,
             g_hSimParams.stepAvg, g_hSimParams.stepPdb, g_hSimParams.temperature
             *g_hSimParams.temperatureU);
 
         if(g_hSimParams.iRegime == SURFACE_GROWTH)   // If surface growth.
-            sprintf(szBuf, TEXT("_x%i_y%i_Me%i_Eq%i_Dep%i_TD%i_Pdb%i_T%3.0f"),
-            g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
+            sprintf(szBuf, TEXT("sg_%s_x%i_y%i_Me%i_Eq%i_Dep%i_TD%i_Pdb%i_T%3.0f"),
+            g_hSimParams.szNameMe, g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
             g_hSimParams.nMolMe, g_hSimParams.stepEquil, g_hSimParams.stepDeposit,
             g_hSimParams.nMolToDeposit, g_hSimParams.stepPdb, g_hSimParams.temperature
             *g_hSimParams.temperatureU);
 
         if(g_hSimParams.iRegime == SHEAR)   // If shear.
-        sprintf(szBuf, TEXT("_sh_x%i_y%i_Me%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f"),
-            g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
+            sprintf(szBuf, TEXT("sh_%s_x%i_y%i_Me%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f"),
+            g_hSimParams.szNameMe, g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
             g_hSimParams.nMolMe, g_hSimParams.stepEquil, g_hSimParams.stepCool,
             g_hSimParams.stepAvg, g_hSimParams.stepPdb,
             g_hSimParams.temperature*g_hSimParams.temperatureU);
 
-        // Modify file name.
-        lstrcat(szBuf, g_hSimParams.szNameMe);
+        if (g_hSimParams.iRegime == CONTACT_MECHANICS)
+            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f"),
+            g_hSimParams.szNameMe, g_unitCellMe.x, g_unitCellMe.y, g_unitCellMe.z,
+            g_hSimParams.nMolMe, g_hSimParams.stepEquil, g_hSimParams.stepCool,
+            g_hSimParams.stepAvg, g_hSimParams.stepPdb,
+            g_hSimParams.temperature * g_hSimParams.temperatureU);
+
         lstrcat(szBuf, TEXT(".txt"));
         lstrcat(g_szResult, szBuf);
 
@@ -721,7 +729,7 @@ void InitSpecForcesAndEnergy()
 }
 
 // Read input file, returns 0 if there is some error.
-bool ReadInputFile(char *szInpFile)
+bool ReadInputFile(const char *szInpFile)
 {
     char c = 0, szBuf[MAX_PATH], szTmp[MAX_PATH];
     int iCount = 0;
