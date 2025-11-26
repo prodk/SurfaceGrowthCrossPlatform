@@ -316,8 +316,8 @@ __global__ void InitSlabCoordsK( float4 *pos )
         {
             pos[n].x = c.x;
             pos[n].y = c.y + shiftY;
-            ///@todo: use the LJ distance 1.1*sigma instead of 0.5f*dparams.a
-            pos[n].z = c.z + 0.5f*dparams.a + dparams.cellShiftZ/dparams.invWidth.z;
+            ///@note: dparams.z_0 already shifted by -0.5*region.z, so shift it back.
+            pos[n].z = c.z + dparams.initSlabHeight + (dparams.z_0 + 0.5f * region.z);
             pos[n].w = 0.0f;
             if (j != 3) {
                 if (j != 0) pos[n].x += 0.5f * gap.x;
@@ -497,6 +497,7 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
         dv[n].z = beta * dv[n].z;
     }
 
+    ///@todo: move this check and beta calculation out of the kernel. Just pass beta as input, 1. by default.
     // For metal atoms.
     if ( (dparams.iRegime == SHEAR) && (n < dparams.nMolMe)&&
         (stepCount > dparams.stepEquil) &&       // This is redundant.
@@ -2445,6 +2446,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             ApplyBerendsenThermostat<<< dimGrid, dimBlock >>>
             ( dv, &hlpArray[0].x, hparams->stepCount );
 
+        ///@todo: add thermostat logic for CONTACT_MECHANICS
+
         // Compute potential energy.
         ComputePotEnergyK<<< grid, block, 2*block*sizeof(float3) >>>(dr, hlpArray);
         // Copy potential energy on host.
@@ -2484,6 +2487,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     }
 // End apply shear.
 
+    ///@todo: add apply vertical pressure here.
+
 // Begin compute rdf.
     if( (hparams->bRdf != 0) && ( hparams->stepCount % hparams->stepRdf == 0 ) )
     {
@@ -2509,8 +2514,13 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     AccumProps (1, hparams);
     if (hparams->stepCount % hparams->stepAvg == 0) {
         AccumProps (2, hparams);
-        if( hparams->bResult != 0 )
-            PrintSummary (fResults, hparams);
+        if (hparams->bResult != 0)
+        {
+            PrintSummary(fResults, hparams);
+
+            std::cout << "\r" << "Step " << hparams->stepCount << " of " << hparams->stepLimit
+                << ", one step: " << hparams->oneStep.sum << " ms" << std::flush;
+        }
         AccumProps (0, hparams);
     }
 
@@ -2612,8 +2622,9 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 // Wrapper that initializes coordinates.
 const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
 {
-    int i;
+    int i{ 0 };
     gpuErrchk(cudaMalloc(&dr, hparams->nMol * sizeof(float4)));    // Allocate device memory.
+
     if(hparams->iRegime == BULK)   // If bulk, then only fcc lattice.
     {
         uint max, middle, min;  // Numbers of unit cells.
@@ -2676,6 +2687,21 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
             // Copy memory from device to host.
             gpuErrchk(cudaMemcpy(hr, dr, hparams->nMolMe*sizeof(float4), cudaMemcpyDeviceToHost));
         }
+    }
+    else if (hparams->iRegime == CONTACT_MECHANICS)
+    {
+        const dim3 dimBlockCarbon(32, 1, 1);
+        const int numBlocks = (hparams->nMol - hparams->nMolMe) / dimBlockCarbon.x;
+        const dim3 dimGridCarbon(numBlocks, 1, 1);
+        InitGrapheneCoordsK <<< dimGridCarbon, dimBlockCarbon >>> (dr);
+        gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol * sizeof(float4), cudaMemcpyDeviceToHost));
+
+        const dim3 blockMe(1, 1, hparams->unitCellMe.z);
+        const dim3 gridMe(hparams->unitCellMe.x, hparams->unitCellMe.y, 1);
+
+        InitSlabCoordsK <<<gridMe, blockMe >>> (dr);
+
+        gpuErrchk(cudaMemcpy(hr, dr, hparams->nMolMe * sizeof(float4), cudaMemcpyDeviceToHost));
     }
 
     gpuErrchk(cudaFree(dr));
@@ -2887,12 +2913,14 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     int n;
     char szFileName[MAX_PATH], szBuf[MAX_PATH];
     ZeroMemory(szFileName, MAX_PATH);
+
     // Define filename.
     sprintf(szBuf, TEXT("_stepCount_%i_"), hparams->stepCount);
     lstrcpy(szFileName, hparams->szRdfPath);
     lstrcat(szBuf, hparams->szNameMe);      // Add metal name.
     lstrcat(szFileName,szBuf);
     lstrcat(szFileName,TEXT(".txt"));
+
     // This code in Rapaport is outside of PrintRdf,
     // but to avoid using real array for histRdf I put this code inside PrintRdf.
     auto normFac = VProd(hparams->particleSize)*Cube(hparams->intervalRdf) /
@@ -2901,7 +2929,11 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     normFac = normFac/hparams->nMolMe;
     normFac = normFac/hparams->nMolMe;
 
-    FILE *rdf = fopen(szFileName,TEXT("w+"));   // Use standard function to open the file.
+    const std::string fileName{ szFileName };
+    std::filesystem::path filePath{ "rdf/" + fileName };
+    std::filesystem::create_directories(filePath.parent_path());
+
+    FILE *rdf = fopen(filePath.string().c_str(), TEXT("w+"));   // Use standard function to open the file.
 
     real histRdf = 0.f;
 

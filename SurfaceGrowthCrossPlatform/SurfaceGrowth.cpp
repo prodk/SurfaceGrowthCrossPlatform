@@ -90,6 +90,7 @@ int g_hcountDiffuseAv = 0;
 // Contact mechanics.
 uint3 g_unitCellMe;          // Number of unit cells in each direction for the metal slab.
 real g_extrusion{ 0.0f };    // Substrate extrusion (same for all the directions), e.g. substrate width = metal_slab_width * (1 + extrusion)
+real g_height_extrusion{ 0.f };// Extrusion of the vertical region size as a fraction of the initial metal slab height.
 
 // Host variables.
 float3  g_hvSum;                           // Total impulse.
@@ -245,11 +246,20 @@ int SetParams()
     // This is inverse width of a cell.
     VDiv (g_hSimParams.invWidth, g_hSimParams.cells, g_hSimParams.region);
     g_hSimParams.cellShiftZ = g_hcellShiftZ;
+
+    g_hSimParams.z_0 = 0.0f;
+
     // Save initial z coordinate of carbon atoms.
-    if(g_hSimParams.nMolMe != 0)
+    if ((g_hSimParams.iRegime == SURFACE_GROWTH || g_hSimParams.iRegime == SHEAR) && g_hSimParams.nMolMe != 0)
+    {
         g_hSimParams.z_0 =
-        -0.5f*g_hSimParams.region.z + g_hSimParams.cellShiftZ/g_hSimParams.invWidth.z;
-    else g_hSimParams.z_0 = 0;
+            -0.5f * g_hSimParams.region.z + g_hSimParams.cellShiftZ / g_hSimParams.invWidth.z;
+    }
+    else if (g_hSimParams.iRegime == CONTACT_MECHANICS)
+    {
+        // Graphene initial coordinate is just g_hcellShiftZ * g_hSimParams.a above the bottom edge of the simulation box.
+        g_hSimParams.z_0 = -0.5f * g_hSimParams.region.z + g_hSimParams.cellShiftZ * g_hSimParams.a;
+    }
 
     // Dimensionless temperature.
     if(g_hTemperature <=0)
@@ -383,6 +393,7 @@ void PrintParams()
     std::cout << "Y cells = " << g_hSimParams.initUcell.y << std::endl;
     std::cout << "Z cells = " << g_hSimParams.initUcell.z << std::endl;
 
+    std::cout << "lattice a = " << g_hSimParams.a * g_hSimParams.lengthU << " Angstrom" << std::endl;
     std::cout << "sigmaLJ = " << g_hSimParams.sigmaLJ * g_hSimParams.lengthU << " Angstrom" << std::endl;
     std::cout << "epsLJ = " << g_hSimParams.epsLJ * g_hSimParams.enU << " eV" << std::endl;
     std::cout << "rCutLJ = " << g_hSimParams.rCutLJ * g_hSimParams.lengthU << " Angstrom" << std::endl;
@@ -442,9 +453,9 @@ int SetupJob()
             g_hSimParams.temperature*g_hSimParams.temperatureU);
 
         if (g_hSimParams.iRegime == CONTACT_MECHANICS)
-            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f_lim%i"),
+            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_cx%i_cy%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f_lim%i"),
             g_hSimParams.szNameMe, g_unitCellMe.x, g_unitCellMe.y, g_unitCellMe.z,
-            g_hSimParams.nMolMe, g_hSimParams.stepEquil, g_hSimParams.stepCool,
+            g_hSimParams.nMolMe, g_hSimParams.initUcell.x, g_hSimParams.initUcell.y, g_hSimParams.stepEquil, g_hSimParams.stepCool,
             g_hSimParams.stepAvg, g_hSimParams.stepPdb,
             g_hSimParams.temperature * g_hSimParams.temperatureU, g_hSimParams.stepLimit);
 
@@ -465,9 +476,10 @@ TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T
             printf ("increment of shear = %f pN, ", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == CONTACT_MECHANICS) )
         {
-            std::cout << "metal X cells = " << g_hSimParams.unitCellMe.x << std::endl;
+            std::cout << "\nmetal X cells = " << g_hSimParams.unitCellMe.x << std::endl;
             std::cout << "metal Y cells = " << g_hSimParams.unitCellMe.y << std::endl;
             std::cout << "metal Z cells = " << g_hSimParams.unitCellMe.z << std::endl;
+            std::cout << "height_extrusion = " << g_height_extrusion << std::endl;
         }
         if( g_hSimParams.bResult != 0 )
             printf ("\n");
@@ -546,7 +558,7 @@ void GrapheneInit()
     g_hSimParams.sigmaLJ = g_hsigma / g_ha0;                        // 2.4945 angstrom
     g_hSimParams.rCutLJ = 2.5*g_hSimParams.sigmaLJ;
     g_hSimParams.rrCutLJ = g_hSimParams.rCutLJ*g_hSimParams.rCutLJ;
-    g_hSimParams.initSlabHeight = 1.12 * g_hSimParams.sigmaLJ;      // Initial height == the LJ energy minimum distance
+    g_hSimParams.initSlabHeight = 0.5 * g_hSimParams.sigmaLJ;      // Initial height related to the LJ energy minimum distance
 }
 
 void CalculateNumberOfAtoms()
@@ -599,11 +611,11 @@ void CalculateRegionSize()
         {
             // Define number of cells under the graphene layer.
             if (g_hSimParams.nMolMe == 0) g_hcellShiftZ = 0;    // Num of cells under graphene.
-            if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
-            if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 2;
-            if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 3;
-            if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 4;
-            if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 5;
+            else if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
+            else if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 2;
+            else if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 3;
+            else if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 4;
+            else if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 5;
 
             // region.z = 1.8*height of the cube + a + number of cells under graphene.
             if (g_hSimParams.nMolMe != 0)
@@ -617,12 +629,12 @@ void CalculateRegionSize()
         {
             // Define number of cells under the graphene layer.
             if (g_hSimParams.nMolMe == 0) g_hcellShiftZ = 0;    // Num of cells under graphene.
-            if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
-            if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 2;
-            if ((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 3;
-            if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 5;
-            if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 7;
-            if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 9;
+            else if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
+            else if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 2;
+            else if ((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 3;
+            else if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 5;
+            else if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 7;
+            else if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 9;
 
             // region.z = height of the cube + 3.6*a + number of cells under graphene.
             if (g_hSimParams.nMolMe != 0)
@@ -636,15 +648,15 @@ void CalculateRegionSize()
             // Define number of cells under the graphene layer.
             ///@todo: play around with these numbers:
             if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
-            if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 2;
-            if ((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 3;
-            if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 5;
-            if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 7;
-            if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 9;
+            else if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 1;
+            else if ((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 3;
+            else if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 5;
+            else if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 7;
+            else if (g_hSimParams.nMolMe >= 20000) g_hcellShiftZ = 9;
 
             // region.z = height of the slab * (1 + P) + initialHeight + number of cells under graphene.
-            g_hregion.z = g_unitCellMe.z * g_hSimParams.a * (1. + g_extrusion) + g_hSimParams.initSlabHeight
-                + g_hcellShiftZ * (g_hSimParams.rCutEam + g_hrNebrShell);
+            g_hregion.z = g_unitCellMe.z * g_hSimParams.a * (1. + g_height_extrusion) + g_hSimParams.initSlabHeight
+                + g_hcellShiftZ * g_hSimParams.a;
         }
 
         VSCopy(g_hSimParams.cells, 1.0 / (g_hSimParams.rCutEam + g_hrNebrShell), g_hregion);
@@ -692,7 +704,7 @@ void VRand (float3 *p, SimParams *hparams)
 }
 
 // Initialize velocities.
-void InitVels ()
+void InitVels()
 {
     int n = 0;
 
@@ -918,6 +930,10 @@ bool ReadInputFile(const char *szInpFile)
 
                 case 26:
                     g_extrusion = atof(szTmp); // Substrate extrusion.
+                    break;
+
+                case 27:
+                    g_height_extrusion = atof(szTmp); // Vertical region extrusion as fraction of the NP initial height.
                     break;
 
             } // End switch row count.
