@@ -497,7 +497,6 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
         dv[n].z = beta * dv[n].z;
     }
 
-    ///@todo: this can be done on CPU outside the kernel
     // For metal atoms.
     if ( (dparams.iRegime == SHEAR) && (n < dparams.nMolMe)&&
         (stepCount > dparams.stepEquil) &&       // This is redundant.
@@ -511,6 +510,10 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
         dv[n].y = beta * dv[n].y;
         dv[n].z = beta * dv[n].z;
     }
+    ///@todo: add the heating/colling logic for CM here.
+    /*else if (dparams.iRegime == CONTACT_MECHANICS)
+    {
+    }*/
 }
 
 // Deposit atoms (for Surface Growth regime).
@@ -1283,7 +1286,7 @@ __global__ void ComputeVvSumK( float3 *dv,  // array of velocities
 
     ///@todo: scale all the 3 components with m!
     // If metal scale by mass.
-    float m = dparams.massMe;
+    const float m = dparams.massMe;
     // Here not threadIdx, but index of molecule!
     if( (2*blockIdx.x*blockDim.x + t) < dparams.nMolMe )
         partialSum[t].x = m*partialSum[t].x;

@@ -34,7 +34,7 @@ bool   gbStartBckup = false;                    // Whether to start from backup 
 int    g_hstepBckup = 10000;                    // How often backup file is created.
 
 // Interface variables.
-int    giRegime = SHEAR;                            // Regime of simulation, shear by default.
+int    giRegime = BULK;                         // Regime of simulation.
 
 // Materials.
 const char*  g_szMaterial[] = {TEXT("Copper (Cu)"), TEXT("Silver (Ag)"), TEXT("Gold (Au)"),
@@ -221,7 +221,7 @@ int SetParams()
     g_hSimParams.forceU = 14.1239836;       // 1 nN dimensionless.
     g_hSimParams.massU = 12.0107;           // Carbon mass in amu.
 
-    g_hSimParams.iRegime = giRegime;        // Save regime.
+    g_hSimParams.iRegime = giRegime;
     g_hSimParams.iMaterial = giMaterial;
     lstrcpy(g_hSimParams.szNameMe, Material[giMaterial].szName);
 
@@ -232,7 +232,7 @@ int SetParams()
         g_hinitUcell.y = 2;
 
     EamInit();          // Initialize eam parameters.
-    GrapheneInit();     // Graphene initialization.
+    GrapheneInit();
 
     CalculateNumberOfAtoms(); // Must be called after EamInit() to have valid g_hSimParams.a
 
@@ -240,6 +240,7 @@ int SetParams()
 
     // Save data in SimParams structure.
     VCopy(g_hSimParams.initUcell, g_hinitUcell);
+    VCopy(g_hSimParams.unitCellMe, g_unitCellMe);
     VCopy(g_hSimParams.region, g_hregion);
     // This is inverse width of a cell.
     VDiv (g_hSimParams.invWidth, g_hSimParams.cells, g_hSimParams.region);
@@ -314,13 +315,23 @@ int SetParams()
         g_hSimParams.nMolDeposited = g_hSimParams.nMolMe;
 
     // Magnitude of initial velocities.
-    if( g_hSimParams.iRegime == BULK)                      // For metal use mass.
-        g_hvelMag = sqrt (NDIM * (1. - 1./g_hSimParams.nMol)*
-        g_hSimParams.kB*g_hSimParams.temperature/g_hSimParams.massMe);
-    else if( g_hSimParams.iRegime != BULK)                 // For carbon mass == 1.
-        g_hvelMag = sqrt (NDIM*(1. -1./(g_hSimParams.nMol))
-        *g_hSimParams.kB*g_hSimParams.temperature *
-        g_hSimParams.nMol/(g_hSimParams.nMol - g_hSimParams.nMolMe));
+    if (g_hSimParams.iRegime == BULK)                      // For metal use mass.
+    {
+        g_hvelMag = sqrt(NDIM * (1. - 1. / g_hSimParams.nMol) *
+            g_hSimParams.kB * g_hSimParams.temperature / g_hSimParams.massMe);
+    }
+    else if (g_hSimParams.iRegime == SURFACE_GROWTH || g_hSimParams.iRegime == SHEAR)
+    {
+        g_hvelMag = sqrt(NDIM * (1. - 1. / (g_hSimParams.nMol))
+            * g_hSimParams.kB * g_hSimParams.temperature *
+            g_hSimParams.nMol / (g_hSimParams.nMol - g_hSimParams.nMolMe)); // Carbon mass == 1.
+    }
+    else if (g_hSimParams.iRegime == CONTACT_MECHANICS)
+    {
+        // Take into account both types of atoms.
+        g_hvelMag = sqrt(NDIM * (1. - 1. / g_hSimParams.nMol) *
+            g_hSimParams.kB * g_hSimParams.temperature / (g_hSimParams.massMe + 1.)); // Carbon mass == 1.
+    }
 
     g_hSimParams.velMag = g_hvelMag;
 
@@ -364,15 +375,18 @@ void PrintParams()
     std::cout << std::endl;
     std::cout << "Input parameters:" << std::endl;
     std::cout << "Regime = " << g_hSimParams.iRegime << std::endl;
-    std::cout << "X cells = " << g_hSimParams.initUcell.x << std::endl;
-    std::cout << "Y cells = " << g_hSimParams.initUcell.y << std::endl;
-    std::cout << "Z cells = " << g_hSimParams.initUcell.z << std::endl;
     std::cout << "Material = " << g_hSimParams.iMaterial << std::endl;
     std::cout << "Total atoms = " << g_hSimParams.nMol << std::endl;
     std::cout << "Metal atoms = " << g_hSimParams.nMolMe << std::endl;
-    std::cout << "sigmaLJ = " << g_hSimParams.sigmaLJ << std::endl;
-    std::cout << "epsLJ = " << g_hSimParams.epsLJ << std::endl;
-    std::cout << "rCutLJ = " << g_hSimParams.rCutLJ << std::endl;
+
+    std::cout << "X cells = " << g_hSimParams.initUcell.x << std::endl;
+    std::cout << "Y cells = " << g_hSimParams.initUcell.y << std::endl;
+    std::cout << "Z cells = " << g_hSimParams.initUcell.z << std::endl;
+
+    std::cout << "sigmaLJ = " << g_hSimParams.sigmaLJ * g_hSimParams.lengthU << " Angstrom" << std::endl;
+    std::cout << "epsLJ = " << g_hSimParams.epsLJ * g_hSimParams.enU << " eV" << std::endl;
+    std::cout << "rCutLJ = " << g_hSimParams.rCutLJ * g_hSimParams.lengthU << " Angstrom" << std::endl;
+
     std::cout << "stepLimit = " << g_hSimParams.stepLimit << std::endl;
     std::cout << "stepEquil = " << g_hSimParams.stepEquil << std::endl;
     std::cout << "stepCool = " << g_hSimParams.stepCool << std::endl;
@@ -405,7 +419,7 @@ int SetupJob()
     if(g_bResult) {
         char szBuf[MAX_PATH];
         // Define file name depending on the regime.
-        if(g_hSimParams.iRegime == BULK)   // If bulk.
+        if(g_hSimParams.iRegime == BULK)
         sprintf(szBuf, TEXT("blk_%s_x%i_y%i_z%i_Me%i_Av%i_Pdb%i_T%3.0f"),
             g_hSimParams.szNameMe, g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
             g_hSimParams.initUcell.z,
@@ -428,11 +442,11 @@ int SetupJob()
             g_hSimParams.temperature*g_hSimParams.temperatureU);
 
         if (g_hSimParams.iRegime == CONTACT_MECHANICS)
-            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f"),
+            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f_lim%i"),
             g_hSimParams.szNameMe, g_unitCellMe.x, g_unitCellMe.y, g_unitCellMe.z,
             g_hSimParams.nMolMe, g_hSimParams.stepEquil, g_hSimParams.stepCool,
             g_hSimParams.stepAvg, g_hSimParams.stepPdb,
-            g_hSimParams.temperature * g_hSimParams.temperatureU);
+            g_hSimParams.temperature * g_hSimParams.temperatureU, g_hSimParams.stepLimit);
 
         lstrcat(szBuf, TEXT(".txt"));
         lstrcat(g_szResult, szBuf);
@@ -449,10 +463,11 @@ TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T
         // Print increment of shear force.
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == SHEAR) )
             printf ("increment of shear = %f pN, ", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
-        if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime != BULK) )
+        if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == CONTACT_MECHANICS) )
         {
-            printf ("epsilonLJ = %f eV, ", g_hSimParams.epsLJ*g_hSimParams.enU);
-            printf ("sigmaLJ = %f angstrom, ", g_hSimParams.sigmaLJ*g_hSimParams.lengthU);
+            std::cout << "metal X cells = " << g_hSimParams.unitCellMe.x << std::endl;
+            std::cout << "metal Y cells = " << g_hSimParams.unitCellMe.y << std::endl;
+            std::cout << "metal Z cells = " << g_hSimParams.unitCellMe.z << std::endl;
         }
         if( g_hSimParams.bResult != 0 )
             printf ("\n");
@@ -568,7 +583,7 @@ void CalculateNumberOfAtoms()
 
 void CalculateRegionSize()
 {
-    if (g_hSimParams.iRegime == BULK)      // If bulk.
+    if (g_hSimParams.iRegime == BULK)
     {
         VSCopy(g_hregion, 1. / pow((g_hSimParams.density * 0.25 / g_hSimParams.massMe), 1. / 3.),
             g_hinitUcell);
@@ -577,7 +592,7 @@ void CalculateRegionSize()
     else if (g_hSimParams.iRegime != BULK) // If surface growth/shear/contact mechanics.
     {
         g_hregion.x = g_hinitUcell.x * 8 * cos(M_PI / 6.);//*a == 1
-        g_hregion.y = g_hinitUcell.y * 6;               //*a == 1
+        g_hregion.y = g_hinitUcell.y * 6;                 //*a == 1
 
         // If surface growth region.z is larger than for shear.
         if (g_hSimParams.iRegime == SURFACE_GROWTH)
@@ -682,31 +697,42 @@ void InitVels ()
     int n = 0;
 
     VZero (g_hvSum);
-    for(n = 0; n < g_hSimParams.nMol; n++) {
-        ///@todo: reconsider
+    for(n = 0; n < g_hSimParams.nMol; n++)
+    {
         // For surface growth and shear, metal atoms have zero initial velocity.
-        if( (g_hSimParams.iRegime != BULK) && (n < g_hSimParams.nMolMe) ) {// For metal.
+        if( ((g_hSimParams.iRegime == SURFACE_GROWTH)
+            || (g_hSimParams.iRegime == SHEAR))
+            && (n < g_hSimParams.nMolMe) ) {// For metal.
             g_hv[n].x = 0.;
             g_hv[n].y = 0.;
             g_hv[n].z = 0.;
         }
-        else {// Carbon atoms.
+        else // Bulk, contact mechanics or carbon atoms in sg/shear.
+        {
             VRand (&g_hv[n], &g_hSimParams);
             VScale (g_hv[n], g_hSimParams.velMag);
             VVAdd (g_hvSum, g_hv[n]);
         }
-        ///@todo: remove debug
-        /*g_hv[n].x = 1.;
-        g_hv[n].y = 0.5;
-        g_hv[n].z = 2.;
-        VVAdd(g_hvSum, g_hv[n]);*/
     }
+
     // Shift velocities to provide zero total impulse.
-    for(n = 0; n < g_hSimParams.nMol; n++) {
-        if( g_hSimParams.iRegime == BULK)
-            VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol), g_hvSum);
-        else if(n >= g_hSimParams.nMolMe)
-            VVSAdd (g_hv[n], - 1./(g_hSimParams.nMol /*- g_hSimParams.nMolMe*/), g_hvSum);///@todo: reconsider
+    for (n = 0; n < g_hSimParams.nMol; n++)
+    {
+        if (g_hSimParams.iRegime == BULK)
+        {
+            VVSAdd(g_hv[n], -1. / (g_hSimParams.nMol), g_hvSum);
+        }
+        else if (((g_hSimParams.iRegime == SURFACE_GROWTH)
+            || (g_hSimParams.iRegime == SHEAR)) && (n >= g_hSimParams.nMolMe))
+        {
+            VVSAdd(g_hv[n], -1. / (g_hSimParams.nMol /*- g_hSimParams.nMolMe*/), g_hvSum);
+        }
+        else if (g_hSimParams.iRegime == CONTACT_MECHANICS)
+        {
+            // Sum of g_hv[i] is originally g_hvSum. We add -g_hvSum/n to each vel.
+            // Then the sum is g_hvSum - n * g_hvSum/n = 0.
+            VVSAdd(g_hv[n], -1. / (g_hSimParams.nMol), g_hvSum);
+        }
     }
 }
 
