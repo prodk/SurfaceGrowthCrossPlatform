@@ -424,7 +424,7 @@ void InitGrapheneCoordsK(float4 *pos)
 __global__ void LeapfrogStepK (int part, float4 *dr, float3 *dv, float3 *da)
 {
     // Index of molecule for current thread.
-    int n = blockIdx.x * blockDim.x + threadIdx.x;
+    const int n = blockIdx.x * blockDim.x + threadIdx.x;
 
     if( n < dparams.nMolMe )    // For metal process all atoms.
     {
@@ -440,7 +440,7 @@ __global__ void LeapfrogStepK (int part, float4 *dr, float3 *dv, float3 *da)
         ( n < dparams.nMol ) )// For graphene don't process boundary atoms.
     {
         real xLeft = 0.f, yBottom = 0.f, xRight = 0.f, yTop = 0.f;
-        const real cos30 = cos(M_PI / 6.f);
+        constexpr real cos30 = 0.8660254038f;
 
         xLeft = 0.5f*(cos30 - dparams.region.x);
         xRight = 0.5f*(dparams.region.x - cos30);
@@ -488,6 +488,7 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
     // !Consider only carbon atoms.
     if ( (n >= dparams.nMolMe) && (n < dparams.nMol) )
     {
+        ///@todo: pass kinEnergy as input instead of vvSum
         const real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
         beta =
             sqrtf( 1.f + dparams.gammaBerendsen *
@@ -506,7 +507,7 @@ __global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount
         const real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
         beta =
             sqrtf( 1.f + dparams.gammaBerendsen *
-            (dparams.temperature*dparams.kB/kinEnergy - 1.f) );
+            (dparams.temperature*dparams.kB/kinEnergy - 1.f) ); ///@todo: add 1.5 factor here too!
         dv[n].x = beta * dv[n].x;
         dv[n].y = beta * dv[n].y;
         dv[n].z = beta * dv[n].z;
@@ -1153,7 +1154,7 @@ __global__ void ComputeVSumK( float3 *dv,         // Array of velocities.
     uint stride, t = threadIdx.x;
     uint maxThreadIdx;
 
-    int maxBlockIdx = floor(dparams.nMol*0.5f/blockDim.x);
+    const int maxBlockIdx = floor(dparams.nMol*0.5f/blockDim.x);
 
     // For partially filled block define the index of the last thread.
     if(maxBlockIdx == 0) maxThreadIdx = dparams.nMol;
@@ -1165,13 +1166,21 @@ __global__ void ComputeVSumK( float3 *dv,         // Array of velocities.
     partialSum[blockDim.x+t] = dv[(2*blockIdx.x + 1)*blockDim.x + t];
 
     // If metal scale by mass.
-    ///@todo: scale all the components, not just x!
-    float m = dparams.massMe;
+    const auto m = dparams.massMe;
     // Here not threadIdx, but index of molecule!
-    if( (2*blockIdx.x*blockDim.x + t) < dparams.nMolMe )
-        partialSum[t].x = m*partialSum[t].x;
-    if( ( (2*blockIdx.x+1)*blockDim.x + t) < dparams.nMolMe )
-        partialSum[blockDim.x+t].x = m*partialSum[blockDim.x+t].x;
+    if ((2 * blockIdx.x * blockDim.x + t) < dparams.nMolMe)
+    {
+        partialSum[t].x = m * partialSum[t].x;
+        partialSum[t].y = m * partialSum[t].y;
+        partialSum[t].z = m * partialSum[t].z;
+    }
+
+    if (((2 * blockIdx.x + 1) * blockDim.x + t) < dparams.nMolMe)
+    {
+        partialSum[blockDim.x + t].x = m * partialSum[blockDim.x + t].x;
+        partialSum[blockDim.x + t].y = m * partialSum[blockDim.x + t].y;
+        partialSum[blockDim.x + t].z = m * partialSum[blockDim.x + t].z;
+    }
 
     // Check if the thread is above the range then zero the sum,
     // this causes divergent warp.
@@ -1285,14 +1294,21 @@ __global__ void ComputeVvSumK( float3 *dv,  // array of velocities
     partialSum[t].x = VLenSq (partialSum[t]);
     partialSum[blockDim.x + t].x = VLenSq (partialSum[blockDim.x + t]);
 
-    ///@todo: scale all the 3 components with m!
     // If metal scale by mass.
     const float m = dparams.massMe;
     // Here not threadIdx, but index of molecule!
-    if( (2*blockIdx.x*blockDim.x + t) < dparams.nMolMe )
-        partialSum[t].x = m*partialSum[t].x;
-    if( ( (2*blockIdx.x+1)*blockDim.x + t) < dparams.nMolMe )
-        partialSum[blockDim.x+t].x = m*partialSum[blockDim.x+t].x;
+    if ((2 * blockIdx.x * blockDim.x + t) < dparams.nMolMe)
+    {
+        partialSum[t].x = m * partialSum[t].x;
+        partialSum[t].y = m * partialSum[t].y;
+        partialSum[t].z = m * partialSum[t].z;
+    }
+    if (((2 * blockIdx.x + 1) * blockDim.x + t) < dparams.nMolMe)
+    {
+        partialSum[blockDim.x + t].x = m * partialSum[blockDim.x + t].x;
+        partialSum[blockDim.x + t].y = m * partialSum[blockDim.x + t].y;
+        partialSum[blockDim.x + t].z = m * partialSum[blockDim.x + t].z;
+    }
 
     // Begin summation, algorithm from lecture 13 Urbana, Illinois,
     // note that here all components are summed, but we're interested only in .x.
@@ -2072,7 +2088,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     TBuf *tBuf = nullptr;
     real *rrDiffuseAv = nullptr;
     FILE *fileDiffuse = NULL;
-    ///@todo: add more criteria to measure diffusion, e.g. nBUffDIffuse is non-0
+
     if(hparams->iRegime == SHEAR)   // If shear, then measure diffusion.
     {
         AllocMem(tBuf, hparams->nBuffDiffuse, TBuf);
@@ -2115,7 +2131,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     // For maxThreadsPerBlock = 1024, nMol <= 2048 * 2048 = 4194304.
 
     constexpr uint maxThreadsPerBlock = 1024;
-    constexpr uint maxBlockCount = 2 * maxThreadsPerBlock; /// @todo: for maxThreadsPerBlock use 2048
+    constexpr uint maxBlockCount = 2 * maxThreadsPerBlock;
     uint grid = (uint) ceil((float)hparams->nMol / maxBlockCount);
     uint block = maxThreadsPerBlock;       // Threads per block for summation.
 
@@ -2297,8 +2313,6 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
         LeapfrogStepK<<< dimGrid, dimBlock >>> ( 2, dr, dv, da );
 
-        //frictForce.x = 0.f; ///@todo: remove
-
 // Kernels, that form EvalProps - evaluate properties,
 // begin compute tribological properties.
         if(hparams->nMolMe != 0)            // Avoid bad values without metal atoms.
@@ -2385,37 +2399,6 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             >>>(dv, hlpArray);
         // Copy total impulse on host.
         gpuErrchk(cudaMemcpy(&vSum, hlpArray, sizeof(float3), cudaMemcpyDeviceToHost));
-
-        /// @todo: debug code start
-
-        //// 1) copy the metal atoms to host
-        //cudaMemcpy(hv, dv, hparams->nMol * sizeof(float3), cudaMemcpyDeviceToHost);
-
-        //// 2) zero total impulse
-        //float3 hvSum;
-        //VZero(hvSum);
-
-        //// 3) sum up metal atoms
-        //for (int idx = 0; idx < hparams->nMol; ++idx)
-        //    VVAdd(hvSum, hv[idx]);
-
-        // 4) scale the impulse with the total metal mass
-        //const auto totalMeMass = hparams->massMe;// *hparams->nMolMe;
-        //VScale(hvSum, totalMeMass);
-        // Average by the total number of atoms.
-        /*const auto nMolInv = 1. / hparams->nMol;
-        VScale(hvSum, nMolInv);*/
-
-        // @todo: repeat the same for non-Me atoms: copy to device, sum, NO scaling needed by mass
-
-        // Output
-        //std::cout << std::fixed << std::setprecision(8)
-        //    << "k=" << vSum.x << " " << vSum.y << " " << vSum.z
-        //    << ", h=" << hvSum.x << " " << hvSum.y << " " << hvSum.z
-        //    //<< ", cub= " << hvSumCub.x << " " << hvSumCub.y << " " << hvSumCub.z
-        //    << ", step =" << hparams->stepCount << std::endl;
-        /// @todo: debug end
-
 
         // Find maximum of squares of velocities.
         ComputeVvMaxK<<< grid,                      // Number of blocks <= 1024.

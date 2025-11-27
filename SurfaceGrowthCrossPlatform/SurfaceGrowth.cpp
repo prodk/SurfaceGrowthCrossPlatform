@@ -372,7 +372,6 @@ int SetParams()
     g_hSimParams.countDiffuseAv = g_hcountDiffuseAv;
 
     // Set seed for random numbers, it is in params structure.
-    ///@todo: change back to 0 for production runs.
     InitRand(0, &g_hSimParams);
     // Copy parameters to the device, global variable dparams in const mem is initialized.
     SetParametersW(&g_hSimParams);          // Wrapper from .cu file.
@@ -401,6 +400,8 @@ void PrintParams()
     std::cout << "stepLimit = " << g_hSimParams.stepLimit << std::endl;
     std::cout << "stepEquil = " << g_hSimParams.stepEquil << std::endl;
     std::cout << "stepCool = " << g_hSimParams.stepCool << std::endl;
+
+    std::cout << "randSeed = " << g_hSimParams.randSeedP << std::endl;
 }
 
 // Make preliminary work.
@@ -646,7 +647,6 @@ void CalculateRegionSize()
         else if (g_hSimParams.iRegime == CONTACT_MECHANICS)
         {
             // Define number of cells under the graphene layer.
-            ///@todo: play around with these numbers:
             if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
             else if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 1;
             else if ((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 3;
@@ -674,8 +674,12 @@ void InitRand (int randSeedI, SimParams *hparams)
         hparams->randSeedP = randSeedI;
     }
     else {
-        mktime (&tv);
-        hparams->randSeedP = tv.tm_sec;
+        std::mt19937 engine(std::chrono::high_resolution_clock::now().time_since_epoch().count());
+        constexpr auto minVal = 1;
+        constexpr auto maxVal = 1000;
+        std::uniform_int_distribution<int> dist(minVal, maxVal);
+
+        hparams->randSeedP = dist(engine);
     }
 }
 
