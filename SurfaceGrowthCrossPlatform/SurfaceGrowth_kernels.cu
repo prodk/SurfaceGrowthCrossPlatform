@@ -479,43 +479,22 @@ __global__ void ApplyBoundaryCondK( float4 *dr )
     }
 }
 
-__global__ void ApplyBerendsenThermostat( float3 *dv, real *vvSum, int stepCount )
+__global__ void ApplyBerendsenThermostat(float3* dv, real beta, bool applyToCarbon, bool applyToMetal)
 {
     // Index of a molecule for current thread.
     const int n = blockIdx.x * blockDim.x + threadIdx.x;
-    real beta = 0.f;
 
-    // !Consider only carbon atoms.
-    if ( (n >= dparams.nMolMe) && (n < dparams.nMol) )
+    const bool isMetal = n < dparams.nMolMe;
+    const bool isCarbon = (n >= dparams.nMolMe) && (n < dparams.nMol);
+
+    const bool useThermostat = (isMetal && applyToMetal) || (isCarbon && applyToCarbon);
+
+    if (useThermostat)
     {
-        ///@todo: pass kinEnergy as input instead of vvSum
-        const real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
-        beta =
-            sqrtf( 1.f + dparams.gammaBerendsen *
-            (dparams.temperature*1.5f*dparams.kB/kinEnergy - 1.f) );
         dv[n].x = beta * dv[n].x;
         dv[n].y = beta * dv[n].y;
         dv[n].z = beta * dv[n].z;
     }
-
-    ///@todo: move this check and beta calculation out of the kernel. Just pass beta as input, 1. by default.
-    // For metal atoms.
-    if ( (dparams.iRegime == SHEAR) && (n < dparams.nMolMe)&&
-        (stepCount > dparams.stepEquil) &&       // This is redundant.
-        (stepCount < dparams.stepEquil + dparams.stepCool) )
-    {
-        const real kinEnergy = (*vvSum)*0.5f / dparams.nMol ;
-        beta =
-            sqrtf( 1.f + dparams.gammaBerendsen *
-            (dparams.temperature*dparams.kB/kinEnergy - 1.f) ); ///@todo: add 1.5 factor here too!
-        dv[n].x = beta * dv[n].x;
-        dv[n].y = beta * dv[n].y;
-        dv[n].z = beta * dv[n].z;
-    }
-    ///@todo: add the heating/colling logic for CM here.
-    /*else if (dparams.iRegime == CONTACT_MECHANICS)
-    {
-    }*/
 }
 
 // Deposit atoms (for Surface Growth regime).
@@ -2069,6 +2048,15 @@ __global__ void EvalRdfK (float4 *dr,           // Coordinates of molecules (glo
 ////////////////////////////////////////////////
 extern "C"  // Can be deleted, but then also in SurfaceGrowth.h.
 {
+
+real calculateBeta(real vvSum, real temperature, const SimParams& hparams)
+{
+    const real kinEnergy = vvSum * 0.5f / hparams.nMol;
+
+    return sqrtf(1.f + hparams.gammaBerendsen *
+                (temperature * 1.5f * hparams.kB / kinEnergy - 1.f));
+}
+
 ////////////////////////////
 // Wrappers calling kernels.
 ////////////////////////////
@@ -2419,17 +2407,43 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         // Apply Berendsen thermostat,
         // for shear apply thermostat to all atoms after stepEquil,
         // for metal only during step cool, for carbon - till the end.
-        if( (hparams->iRegime == SHEAR) && (hparams->stepCount > hparams->stepEquil)
+        if ((hparams->iRegime == SHEAR) && (hparams->stepCount > hparams->stepEquil)
             && (hparams->stepCount % hparams->stepThermostat == 0))
-            ApplyBerendsenThermostat<<< dimGrid, dimBlock >>>
-            ( dv, &hlpArray[0].x, hparams->stepCount ); // If step > cool Me is not thermostatted.
+        {
+            constexpr bool applyToCarbon = true;
+            const bool applyToMetal = (hparams->stepCount > hparams->stepEquil) &&
+                                      (hparams->stepCount < hparams->stepEquil + hparams->stepCool);
+
+            const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
+
+            ApplyBerendsenThermostat <<< dimGrid, dimBlock >>>
+                (dv, beta, applyToCarbon, applyToMetal); // If step > cool Me is not thermostatted.
+        }
 
         // For SG apply thermostat to carbon atoms during all simulation.
-        if( (hparams->iRegime == SURFACE_GROWTH) && (hparams->stepCount % hparams->stepThermostat == 0))
-            ApplyBerendsenThermostat<<< dimGrid, dimBlock >>>
-            ( dv, &hlpArray[0].x, hparams->stepCount );
+        else if ((hparams->iRegime == SURFACE_GROWTH) && (hparams->stepCount % hparams->stepThermostat == 0))
+        {
+            constexpr bool applyToCarbon = true;
+            constexpr bool applyToMetal = false;
 
-        ///@todo: add thermostat logic for CONTACT_MECHANICS
+            const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
+
+            ApplyBerendsenThermostat <<< dimGrid, dimBlock >>>(dv, beta, applyToCarbon, applyToMetal);
+        }
+        ///@todo: reconsider stepThermostat for CM: probably should be more flexible.
+        else if ((hparams->iRegime == CONTACT_MECHANICS) && (hparams->stepCount % hparams->stepThermostat == 0))
+        {
+            ///@todo: the expected workflow:
+            // 1. Heatup the system so that the NP melts. Determine melting manually by rdf/energy jumps, or in the code.
+            // 2. Cooldown the system to the room temperature. Set the cooldown speed: if fast, amorphous, if slow - crystal.
+            // 3. Equilibrate at the room temperature for some time.
+            constexpr bool applyToCarbon = true;
+            constexpr bool applyToMetal = true;
+
+            const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
+
+            ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
+        }
 
         // Compute potential energy.
         ComputePotEnergyK<<< grid, block, 2*block*sizeof(float3) >>>(dr, hlpArray);
@@ -2676,6 +2690,7 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
         const dim3 dimBlockCarbon(32, 1, 1);
         const int numBlocks = (hparams->nMol - hparams->nMolMe) / dimBlockCarbon.x;
         const dim3 dimGridCarbon(numBlocks, 1, 1);
+
         InitGrapheneCoordsK <<< dimGridCarbon, dimBlockCarbon >>> (dr);
         gpuErrchk(cudaMemcpy(hr, dr, hparams->nMol * sizeof(float4), cudaMemcpyDeviceToHost));
 
@@ -2683,7 +2698,6 @@ const char* InitCoordsW(float4 *dr, float4 *hr, SimParams* hparams)
         const dim3 gridMe(hparams->unitCellMe.x, hparams->unitCellMe.y, 1);
 
         InitSlabCoordsK <<<gridMe, blockMe >>> (dr);
-
         gpuErrchk(cudaMemcpy(hr, dr, hparams->nMolMe * sizeof(float4), cudaMemcpyDeviceToHost));
     }
 
