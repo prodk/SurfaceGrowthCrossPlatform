@@ -48,7 +48,7 @@ namespace
 void AccumProps (int icode, SimParams *hparams);    // Accumulate properties.
 void PrintSummary (FILE *fp, SimParams *hparams);   // Print results in a file.
 int CreatePdbFile(char * szPdb, SimParams *hparams, float4 *r);
-void PrintRdf(SimParams *hparams, uint *hHistRdf);  // Prints rdf data in a file.
+std::vector<real> PrintRdf(SimParams *hparams, uint *hHistRdf);  // Prints rdf data in a file.
 void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy, float3* ha);
 
 // Random numbers.
@@ -2057,6 +2057,23 @@ real calculateBeta(real vvSum, real temperature, const SimParams& hparams)
                 (temperature * 1.5f * hparams.kB / kinEnergy - 1.f));
 }
 
+bool isPeak(real prev, real cur, real next)
+{
+    return cur > prev && cur > next;
+}
+
+uint32_t countPeaks(const std::vector<real>& v, real minPeakValue)
+{
+    uint32_t res = 0;
+    for (size_t idx = 1; idx < v.size(); ++idx)
+    {
+        const auto& cur = v[idx];
+        if (cur > minPeakValue && isPeak(v[idx - 1], v[idx], v[idx + 1]))
+            ++res;
+    }
+    return res;
+}
+
 ////////////////////////////
 // Wrappers calling kernels.
 ////////////////////////////
@@ -2142,6 +2159,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
     float hTime, hTimeTotal;    // Time of one time step and of the complete run.
     cudaEvent_t start, stop, totalStart, totalStop;
+
+    uint32_t rdfPeaksCount = 0;
 
 // Begin memory allocation.
     gpuErrchk(cudaMalloc(&dr, hparams->nMol * sizeof(float4)));
@@ -2495,8 +2514,11 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         {
             // Copy rdf on host.
             gpuErrchk(cudaMemcpy(hHistRdf, histRdf, hparams->sizeHistRdf*sizeof(uint), cudaMemcpyDeviceToHost));
-            PrintRdf(hparams, hHistRdf);
+            const auto transformedHist = PrintRdf(hparams, hHistRdf);
             hparams->countRdf = 0;
+
+            constexpr real minPeakValue = 1.5f;
+            rdfPeaksCount = countPeaks(transformedHist, minPeakValue);
         }
     }
 // End compute rdf.
@@ -2516,7 +2538,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             PrintSummary(fResults, hparams);
 
             std::cout << "\r" << "Step " << hparams->stepCount << " of " << hparams->stepLimit
-                << ", one step: " << hparams->oneStep.sum << " ms" << std::flush;
+                << ", one step: " << hparams->oneStep.sum << " ms" << ", rdf peaks = " << rdfPeaksCount << std::flush;
         }
         AccumProps (0, hparams);
     }
@@ -2834,12 +2856,7 @@ int CreatePdbFile(char *szPdb, SimParams *hparams, float4 *r)
 
     // To avoid problems with file exstentions.
     i = hparams->stepCount / hparams->stepPdb;
-    if(i < 100)
-        sprintf(szBuf, TEXT("_%i"), i);
-    else if(i < 1000)
-        sprintf(szBuf, TEXT("_%-3i"), i);
-    else if(i < 10000)
-        sprintf(szBuf, TEXT("_%-4i"), i);
+    sprintf(szBuf, TEXT("_%06i"), i);
 
     lstrcat(szBuf, TEXT(".pdb"));
 
@@ -2904,7 +2921,7 @@ int CreatePdbFile(char *szPdb, SimParams *hparams, float4 *r)
     return 1;
 }
 
-void PrintRdf(SimParams *hparams, uint *hHistRdf)
+std::vector<real> PrintRdf(SimParams *hparams, uint *hHistRdf)
 {
     real rb;
     int n;
@@ -2912,7 +2929,7 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     ZeroMemory(szFileName, MAX_PATH);
 
     // Define filename.
-    sprintf(szBuf, TEXT("_stepCount_%i_"), hparams->stepCount);
+    sprintf(szBuf, TEXT("_stepCount_%07i_"), hparams->stepCount);
     lstrcpy(szFileName, hparams->szRdfPath);
     lstrcat(szBuf, hparams->szNameMe);      // Add metal name.
     lstrcat(szFileName,szBuf);
@@ -2934,14 +2951,21 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
 
     real histRdf = 0.f;
 
+    std::vector<real> transformedHist;
+    transformedHist.reserve(hparams->sizeHistRdf);
+
     for(n = 0; n < hparams->sizeHistRdf; n++)
     {
         rb = (n + 0.5f)*hparams->rangeRdf*hparams->lengthU / hparams->sizeHistRdf;
         histRdf = (real) hHistRdf[n]*normFac / ((n - 0.5f)*(n - 0.5f));
         fprintf(rdf, TEXT("%-.7f %-.7f\n"), rb, histRdf);
+
+        transformedHist.push_back(histRdf);
     }
 
     fclose(rdf);
+
+    return transformedHist;
 }
 
 void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy, float3* ha)
@@ -2949,7 +2973,7 @@ void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForce
     const auto fileNumber = hparams->stepCount / hparams->stepPdb;
 
     std::stringstream ss;
-    ss << fileNumber << "_step_" << hparams->stepCount << ".txt";
+    ss << std::setfill('0') << std::setw(7) << fileNumber << "_step_" << hparams->stepCount << ".txt";
 
     std::filesystem::path filePath{ "forces/forces_" + ss.str() };
     std::filesystem::create_directories(filePath.parent_path());

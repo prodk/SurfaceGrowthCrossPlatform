@@ -123,19 +123,16 @@ int main(int argc, char* argv[])
     gpuErrchk(cudaGetDeviceProperties(&g_hDeviceProp, 0));
 
     std::cout << std::endl;
-    std::cout << "GPU parameters:" << std::endl;
     std::cout << "GPU name =" << std::string(g_hDeviceProp.name) << std::endl;
-    std::cout << "GPU id = " << std::string(g_hDeviceProp.uuid.bytes) << std::endl;
     std::cout << "Compute capability = " << g_hDeviceProp.major << "." << g_hDeviceProp.minor << std::endl;
-    std::cout << "Max threads per block = " << g_hDeviceProp.maxThreadsPerBlock << std::endl;
+    std::cout << "Max threads per block = " << g_hDeviceProp.maxThreadsPerBlock << ", ";
     std::cout << "maxThreadsDim = " << g_hDeviceProp.maxThreadsDim[0] << " "
-        << g_hDeviceProp.maxThreadsDim[1] << " " << g_hDeviceProp.maxThreadsDim[2] << std::endl;
+        << g_hDeviceProp.maxThreadsDim[1] << " " << g_hDeviceProp.maxThreadsDim[2] << ", ";
     std::cout << "maxGridSize = " << g_hDeviceProp.maxGridSize[0] << " "
         << g_hDeviceProp.maxGridSize[1] << " " << g_hDeviceProp.maxGridSize[2] << std::endl;
     std::cout << "Total global memory = " << g_hDeviceProp.totalGlobalMem <<
                  ", Total constant memroy = " << g_hDeviceProp.totalConstMem <<
                  ", Memory bus width = " << g_hDeviceProp.memoryBusWidth << std::endl;
-    std::cout << std::endl;
 
     // Check compute capability, if less than 1.2 then exit.
     if ( (g_hDeviceProp.major < 1) ||
@@ -388,18 +385,22 @@ void PrintParams()
     std::cout << "Total atoms = " << g_hSimParams.nMol << std::endl;
     std::cout << "Metal atoms = " << g_hSimParams.nMolMe << std::endl;
 
-    std::cout << "X cells = " << g_hSimParams.initUcell.x << std::endl;
-    std::cout << "Y cells = " << g_hSimParams.initUcell.y << std::endl;
-    std::cout << "Z cells = " << g_hSimParams.initUcell.z << std::endl;
+    std::cout << "Carb cells = " << g_hSimParams.initUcell.x << " " << g_hSimParams.initUcell.y
+              << " " << g_hSimParams.initUcell.z << std::endl;
 
     std::cout << "lattice a = " << g_hSimParams.a * g_hSimParams.lengthU << " Angstrom" << std::endl;
     std::cout << "sigmaLJ = " << g_hSimParams.sigmaLJ * g_hSimParams.lengthU << " Angstrom" << std::endl;
     std::cout << "epsLJ = " << g_hSimParams.epsLJ * g_hSimParams.enU << " eV" << std::endl;
     std::cout << "rCutLJ = " << g_hSimParams.rCutLJ * g_hSimParams.lengthU << " Angstrom" << std::endl;
 
+    std::cout << "T = " << g_hSimParams.temperature * g_hSimParams.temperatureU << " K" << std::endl;
+
     std::cout << "stepLimit = " << g_hSimParams.stepLimit << std::endl;
     std::cout << "stepEquil = " << g_hSimParams.stepEquil << std::endl;
     std::cout << "stepCool = " << g_hSimParams.stepCool << std::endl;
+    std::cout << "stepThermostat = " << g_hSimParams.stepThermostat << std::endl;
+    std::cout << "stepRdf = " << g_hSimParams.stepRdf << std::endl;
+    std::cout << "stepPdb = " << g_hSimParams.stepPdb << std::endl;
 
     std::cout << "randSeed = " << g_hSimParams.randSeedP << std::endl;
 }
@@ -469,17 +470,16 @@ TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T
 
         // Print additional values to cmd.
         if( g_hSimParams.bResult != 0 )
-            printf ("time step = %f, ", g_hSimParams.deltaT);
+            printf ("time step = %f", g_hSimParams.deltaT);
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == SURFACE_GROWTH) )
-            printf ("deposit energy = %f eV, ", g_hDeposEnergy);
+            printf ("deposit energy = %f eV ", g_hDeposEnergy);
         // Print increment of shear force.
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == SHEAR) )
-            printf ("increment of shear = %f pN, ", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
+            printf ("increment of shear = %f pN ", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == CONTACT_MECHANICS) )
         {
-            std::cout << "\nmetal X cells = " << g_hSimParams.unitCellMe.x << std::endl;
-            std::cout << "metal Y cells = " << g_hSimParams.unitCellMe.y << std::endl;
-            std::cout << "metal Z cells = " << g_hSimParams.unitCellMe.z << std::endl;
+            std::cout << "\nmetal cells = " << g_hSimParams.unitCellMe.x << " " << g_hSimParams.unitCellMe.y
+                      << " " << g_hSimParams.unitCellMe.z << std::endl;
             std::cout << "height_extrusion = " << g_height_extrusion << std::endl;
         }
         if( g_hSimParams.bResult != 0 )
@@ -648,7 +648,7 @@ void CalculateRegionSize()
         {
             // Define number of cells under the graphene layer.
             if ((g_hSimParams.nMolMe > 0) && (g_hSimParams.nMolMe < 100)) g_hcellShiftZ = 1;
-            else if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 1;
+            else if ((g_hSimParams.nMolMe >= 100) && (g_hSimParams.nMolMe < 1000)) g_hcellShiftZ = 2;
             else if ((g_hSimParams.nMolMe >= 1000) && (g_hSimParams.nMolMe < 5000)) g_hcellShiftZ = 3;
             else if ((g_hSimParams.nMolMe >= 5000) && (g_hSimParams.nMolMe < 10000)) g_hcellShiftZ = 5;
             else if ((g_hSimParams.nMolMe >= 10000) && (g_hSimParams.nMolMe < 20000)) g_hcellShiftZ = 7;
@@ -938,6 +938,10 @@ bool ReadInputFile(const char *szInpFile)
 
                 case 27:
                     g_height_extrusion = atof(szTmp); // Vertical region extrusion as fraction of the NP initial height.
+                    break;
+
+                case 28:
+                    g_hstepThermostat = atoi(szTmp); // Apply the thermostat every g_hstepThermostat steps.
                     break;
 
             } // End switch row count.

@@ -4,7 +4,7 @@
 4           # unit cells in y					4
 4           # unit cells in z					5
 330         # temperature	(K)				6
-100         # number of metal atoms (if regime is not bulk)	7
+100         # number of metal atoms (if regime is shear or sg)	7
 0.0087381   # epsilon for metal-carbon LJ interaction		8
 2.4945      # sigma for metal-carbon LJ interaction		9
 
@@ -28,7 +28,7 @@
 
 # data handling
 100         # create pdb file after this number of steps	19
-50          # compute rdf after this number of steps		20
+10          # compute rdf after this number of steps		20
 0           # create backup, 0 - no, 1 - yes			21
 0           # start from backup					22
 
@@ -36,5 +36,6 @@
 3           # metal unit cells in x	        23
 3           # metal unit cells in y         24
 3           # metal unit cells in z         25
-0.1         # substrate extrusion, e.g. substrate width = metal_slab_width * (1 + extrusion) 26
-0.2         # vertical region extrusion as a fraction of the metal slab height 27
+0.5         # substrate extrusion, e.g. substrate width = metal_slab_width * (1 + extrusion) 26
+1.2         # vertical region extrusion as a fraction of the metal slab height 27
+100         # apply thermostat every steps 27
