@@ -160,7 +160,10 @@ struct SimParams
     int     initUcellMeX;
     int     initUcellMeY;
     uint3   unitCellMe;
-    real    initSlabHeight; // Initial height of the metal slab above the sheet.
+    real    initSlabHeight;   // Initial height of the metal slab above the sheet.
+    real    finalTemperature; // Cooling T.
+    real    maxNPHeightFraction; // Fraction of max NP's height to determine when cooling should be applied.
+    int     coolingStepThermostat; // Frequency of the thermostat during cooling.
     // rdf variables
     real    rangeRdf;           // maximum distance between atoms for rdf
     int     limitRdf;           // number of measurements

@@ -48,7 +48,7 @@ real    g_hvelMag = 0.f;            // Magnitude of initial velocity, is defined
 real    g_hrNebrShell = 0.4f;       // Distance to add to the cutoff for neighbors.
 int     g_hiNebrMax = 2*BLOCK_SIZE; // Maximum number of neighbors.
 int     g_hBlockSize = BLOCK_SIZE;  // Is used in shared memory arrays.
-real    g_hTemperature = 298;       // Temperature, K.
+real    g_hTemperature = 298;       // Temperature, K (or heating temperature for CM).
 int     g_hStepLimit = 50000;       // Duration of the simulation.
 int     g_hrandSeedP;               // Seed for random numbers.
 int     g_hstepAvg = 250;           // Step for averaging of measurements.
@@ -88,9 +88,12 @@ int g_hlimitDiffuseAv = 20;
 int g_hcountDiffuseAv = 0;
 
 // Contact mechanics.
-uint3 g_unitCellMe;          // Number of unit cells in each direction for the metal slab.
-real g_extrusion{ 0.0f };    // Substrate extrusion (same for all the directions), e.g. substrate width = metal_slab_width * (1 + extrusion)
-real g_height_extrusion{ 0.f };// Extrusion of the vertical region size as a fraction of the initial metal slab height.
+uint3 g_unitCellMe;             // Number of unit cells in each direction for the metal slab.
+real g_extrusion{ 0.0f };       // Substrate extrusion (same for all the directions), e.g. substrate width = metal_slab_width * (1 + extrusion)
+real g_height_extrusion{ 0.f }; // Extrusion of the vertical region size as a fraction of the initial metal slab height.
+real g_finalTemperature{ 298 }; // Final (cooling) temperature, K.
+real g_maxNPHeightFraction{ 0.0f }; // Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
+int  g_coolingStepThermostat{ g_hstepThermostat }; // How often thermostat is applied during the cooling phase.
 
 // Host variables.
 float3  g_hvSum;                           // Total impulse.
@@ -262,6 +265,10 @@ int SetParams()
     if(g_hTemperature <=0)
         g_hTemperature = 298;
     g_hSimParams.temperature = g_hTemperature / g_hSimParams.temperatureU;
+
+    g_hSimParams.finalTemperature = g_finalTemperature / g_hSimParams.temperatureU;
+    g_hSimParams.maxNPHeightFraction = g_maxNPHeightFraction;
+    g_hSimParams.coolingStepThermostat = g_coolingStepThermostat;
 
     if(g_hstepAvg <=0)
         g_hstepAvg = 1;
@@ -476,13 +483,18 @@ TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T
         // Print increment of shear force.
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == SHEAR) )
             printf ("increment of shear = %f pN ", g_hSimParams.deltaF*1000/g_hSimParams.forceU);
+
         if( (g_hSimParams.bResult != 0) && (g_hSimParams.iRegime == CONTACT_MECHANICS) )
         {
             std::cout << "\nmetal cells = " << g_hSimParams.unitCellMe.x << " " << g_hSimParams.unitCellMe.y
                       << " " << g_hSimParams.unitCellMe.z << std::endl;
             std::cout << "height_extrusion = " << g_height_extrusion << std::endl;
             std::cout << "substrate_extrusion = " << g_extrusion << std::endl;
+            std::cout << "final T = " << g_hSimParams.finalTemperature * g_hSimParams.temperatureU << std::endl;
+            std::cout << "Height fraction = " << g_hSimParams.maxNPHeightFraction << std::endl;
+            std::cout << "Thermostat cooling step = " << g_hSimParams.coolingStepThermostat << std::endl;
         }
+
         if( g_hSimParams.bResult != 0 )
             printf ("\n");
     }       // End if(g_bResult).
@@ -943,6 +955,18 @@ bool ReadInputFile(const char *szInpFile)
 
                 case 28:
                     g_hstepThermostat = atoi(szTmp); // Apply the thermostat every g_hstepThermostat steps (in CM only heating).
+                    break;
+
+                case 29:
+                    g_finalTemperature = atof(szTmp); // Final temperature (typically cooling T after the NP has melted).
+                    break;
+
+                case 30:
+                    g_maxNPHeightFraction = atof(szTmp); // Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
+                    break;
+
+                case 31:
+                    g_coolingStepThermostat = atoi(szTmp); // Frequency of thermostat during the cooling phase.
                     break;
 
             } // End switch row count.

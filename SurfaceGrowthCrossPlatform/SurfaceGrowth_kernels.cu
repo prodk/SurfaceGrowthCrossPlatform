@@ -2142,6 +2142,10 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     float hTime, hTimeTotal;    // Time of one time step and of the complete run.
     cudaEvent_t start, stop, totalStart, totalStop;
 
+    const auto origNPHeight = hparams->unitCellMe.z * hparams->a;
+    const auto maxNPHeight = origNPHeight * (1.f + hparams->maxNPHeightFraction);
+    bool isHeating = true;
+
 // Begin memory allocation.
     gpuErrchk(cudaMalloc(&dr, hparams->nMol * sizeof(float4)));
     // Also allocate memory for velocities and accelerations.
@@ -2429,19 +2433,25 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
             ApplyBerendsenThermostat <<< dimGrid, dimBlock >>>(dv, beta, applyToCarbon, applyToMetal);
         }
-        ///@todo: reconsider stepThermostat for CM: probably should be more flexible.
-        else if ((hparams->iRegime == CONTACT_MECHANICS) && (hparams->stepCount % hparams->stepThermostat == 0))
+        else if (hparams->iRegime == CONTACT_MECHANICS)
         {
-            ///@todo: the expected workflow:
-            // 1. Heatup the system so that the NP melts. Determine melting manually by rdf/energy jumps, or in the code.
-            // 2. Cooldown the system to the room temperature. Set the cooldown speed: if fast, amorphous, if slow - crystal.
-            // 3. Equilibrate at the room temperature for some time.
             constexpr bool applyToCarbon = true;
             constexpr bool applyToMetal = true;
 
-            const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
+            // 1. Heatup the system so that the NP melts. Heating happens until the height of the NP is small enough.
+            isHeating = hparams->particleSize.z < maxNPHeight;
 
-            ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
+            if (isHeating && (hparams->stepCount % hparams->stepThermostat == 0))
+            {
+                const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
+                ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
+            }
+            // 2. Cooldown the system to the finalTemperature and equilibrate at this temperature.
+            else if (hparams->stepCount % hparams->coolingStepThermostat == 0)
+            {
+                const auto beta = calculateBeta(vvSum, hparams->finalTemperature, *hparams);
+                ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
+            }
         }
 
         // Compute potential energy.
@@ -2514,8 +2524,10 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         {
             PrintSummary(fResults, hparams);
 
-            std::cout << "\r" << "Step " << hparams->stepCount << " of " << hparams->stepLimit
-                << ", one step: " << hparams->oneStep.sum << " ms" << std::flush;
+            std::cout << "\r" << hparams->stepCount << "/" << hparams->stepLimit
+                << "/" << std::fixed << std::setprecision(2) << hparams->oneStep.sum << " ms"
+                << ", maxHeight: " << maxNPHeight << ", curHeight: " << hparams->particleSize.z
+                << (isHeating ? " heat" : " cool") << std::flush;
         }
         AccumProps (0, hparams);
     }
