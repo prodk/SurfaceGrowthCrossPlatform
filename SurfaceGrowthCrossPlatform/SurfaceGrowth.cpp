@@ -481,6 +481,7 @@ TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T
             std::cout << "\nmetal cells = " << g_hSimParams.unitCellMe.x << " " << g_hSimParams.unitCellMe.y
                       << " " << g_hSimParams.unitCellMe.z << std::endl;
             std::cout << "height_extrusion = " << g_height_extrusion << std::endl;
+            std::cout << "substrate_extrusion = " << g_extrusion << std::endl;
         }
         if( g_hSimParams.bResult != 0 )
             printf ("\n");
@@ -941,7 +942,7 @@ bool ReadInputFile(const char *szInpFile)
                     break;
 
                 case 28:
-                    g_hstepThermostat = atoi(szTmp); // Apply the thermostat every g_hstepThermostat steps.
+                    g_hstepThermostat = atoi(szTmp); // Apply the thermostat every g_hstepThermostat steps (in CM only heating).
                     break;
 
             } // End switch row count.
