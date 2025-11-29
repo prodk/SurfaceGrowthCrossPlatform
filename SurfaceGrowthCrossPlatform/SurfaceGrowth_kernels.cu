@@ -2042,6 +2042,32 @@ __global__ void EvalRdfK (float4 *dr,           // Coordinates of molecules (glo
     } // Step 22 end for (offset = 0; offset < N_OFFSET_LARGE; offset ++).
 }
 
+//namespace
+//{
+//    std::vector<real> movingAverage(const std::vector<real>& signal, int windowSize) {
+//        if (signal.empty() || windowSize <= 0)
+//        {
+//            return {};
+//        }
+//
+//        std::vector<real> smoothedSignal(signal.size());
+//        const auto halfWindow = windowSize / 2;
+//
+//        for (int idx = 0; idx < static_cast<int>(signal.size()); ++idx) {
+//            real sum = 0.0;
+//            int count = 0;
+//            for (int j = idx - halfWindow; j <= idx + halfWindow; ++j) {
+//                if (j >= 0 && j < signal.size()) {
+//                    sum += signal[j];
+//                    ++count;
+//                }
+//            }
+//            smoothedSignal[idx] = sum / count;
+//        }
+//        return smoothedSignal;
+//    }
+//} // Anonymous namespace.
+
 
 ////////////////////////////////////////////////
 // Wrappers - W at the end of the function name.
@@ -2517,8 +2543,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             const auto transformedHist = PrintRdf(hparams, hHistRdf);
             hparams->countRdf = 0;
 
-            constexpr real minPeakValue = 1.5f;
-            rdfPeaksCount = countPeaks(transformedHist, minPeakValue);
+            /*constexpr real minPeakValue = 1.5f;
+            rdfPeaksCount = countPeaks(transformedHist, minPeakValue);*/
         }
     }
 // End compute rdf.
@@ -2952,7 +2978,7 @@ std::vector<real> PrintRdf(SimParams *hparams, uint *hHistRdf)
     real histRdf = 0.f;
 
     std::vector<real> transformedHist;
-    transformedHist.reserve(hparams->sizeHistRdf);
+    //transformedHist.reserve(hparams->sizeHistRdf);
 
     for(n = 0; n < hparams->sizeHistRdf; n++)
     {
@@ -2960,8 +2986,17 @@ std::vector<real> PrintRdf(SimParams *hparams, uint *hHistRdf)
         histRdf = (real) hHistRdf[n]*normFac / ((n - 0.5f)*(n - 0.5f));
         fprintf(rdf, TEXT("%-.7f %-.7f\n"), rb, histRdf);
 
-        transformedHist.push_back(histRdf);
+        //transformedHist.push_back(histRdf);
     }
+
+    /*constexpr int windowSize = 4;
+    transformedHist = movingAverage(transformedHist, windowSize);
+
+    for (n = 0; n < hparams->sizeHistRdf; n++)
+    {
+        rb = (n + 0.5f) * hparams->rangeRdf * hparams->lengthU / hparams->sizeHistRdf;
+        fprintf(rdf, TEXT("%-.7f %-.7f\n"), rb, transformedHist[n]);
+    }*/
 
     fclose(rdf);
 
