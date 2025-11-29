@@ -462,9 +462,9 @@ int SetupJob()
             g_hSimParams.temperature*g_hSimParams.temperatureU);
 
         if (g_hSimParams.iRegime == CONTACT_MECHANICS)
-            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_cx%i_cy%i_Eq%i_C%i_Av%i_Pdb%i_T%3.0f_lim%i"),
+            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_cx%i_cy%i_Av%i_Pdb%i_T%3.0f_lim%i"),
             g_hSimParams.szNameMe, g_unitCellMe.x, g_unitCellMe.y, g_unitCellMe.z,
-            g_hSimParams.nMolMe, g_hSimParams.initUcell.x, g_hSimParams.initUcell.y, g_hSimParams.stepEquil, g_hSimParams.stepCool,
+            g_hSimParams.nMolMe, g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
             g_hSimParams.stepAvg, g_hSimParams.stepPdb,
             g_hSimParams.temperature * g_hSimParams.temperatureU, g_hSimParams.stepLimit);
 

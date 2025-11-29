@@ -2145,6 +2145,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
     const auto origNPHeight = hparams->unitCellMe.z * hparams->a;
     const auto maxNPHeight = origNPHeight * (1.f + hparams->maxNPHeightFraction);
     bool isHeating = true;
+    bool onlyCooling = false;
 
 // Begin memory allocation.
     gpuErrchk(cudaMalloc(&dr, hparams->nMol * sizeof(float4)));
@@ -2441,13 +2442,19 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             // 1. Heatup the system so that the NP melts. Heating happens until the height of the NP is small enough.
             isHeating = hparams->particleSize.z < maxNPHeight;
 
+            // If the cooling condition has been reached, prohibit heating.
+            if (!isHeating && !onlyCooling)
+                onlyCooling = true;
+
+            isHeating = !onlyCooling;
+
             if (isHeating && (hparams->stepCount % hparams->stepThermostat == 0))
             {
                 const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
                 ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
             }
             // 2. Cooldown the system to the finalTemperature and equilibrate at this temperature.
-            else if (hparams->stepCount % hparams->coolingStepThermostat == 0)
+            else if (!isHeating && (hparams->stepCount % hparams->coolingStepThermostat == 0))
             {
                 const auto beta = calculateBeta(vvSum, hparams->finalTemperature, *hparams);
                 ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
