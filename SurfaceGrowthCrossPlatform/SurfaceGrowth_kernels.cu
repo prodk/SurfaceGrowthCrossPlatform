@@ -2962,9 +2962,12 @@ void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForce
     const auto fileNumber = hparams->stepCount / hparams->stepPdb;
 
     std::stringstream ss;
-    ss << std::setfill('0') << std::setw(7) << fileNumber << "_step_" << hparams->stepCount << ".txt";
+    ss << "_x" << hparams->unitCellMe.x << "_y" << hparams->unitCellMe.y << "_z" << hparams->unitCellMe.z
+        << "_" << std::setfill('0') << std::setw(7) << fileNumber << "_step_" << hparams->stepCount << ".txt";
 
-    std::filesystem::path filePath{ "forces/forces_" + ss.str() };
+    const std::string metalName{ hparams->szNameMe };
+
+    std::filesystem::path filePath{ "forces/f_" + metalName + ss.str() };
     std::filesystem::create_directories(filePath.parent_path());
 
     std::ofstream outFile(filePath);
@@ -2974,9 +2977,17 @@ void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForce
         for (int idx = 0; idx < hparams->nMol; ++idx)
         {
             std::stringstream fss;
-            fss << idx << " " << r[idx].x << " " << r[idx].y << " " << r[idx].z << " " << specForcesAndEnergy[idx].x
-                << " " << specForcesAndEnergy[idx].y << " " << specForcesAndEnergy[idx].z << " " << specForcesAndEnergy[idx].w
-                << " " << ha[idx].x << " " << ha[idx].y << " " << ha[idx].z << " " << r[idx].w << "\n";
+            fss << idx << " "
+                << r[idx].x * hparams->lengthU << " "
+                << r[idx].y * hparams->lengthU << " "
+                << r[idx].z * hparams->lengthU << " "
+                << specForcesAndEnergy[idx].x  << " "
+                << specForcesAndEnergy[idx].y  << " "
+                << specForcesAndEnergy[idx].z  << " "
+                << specForcesAndEnergy[idx].w << " "
+                << ha[idx].x << " "
+                << ha[idx].y << " "
+                << ha[idx].z << " " << r[idx].w << "\n";
             outFile << fss.str();
         }
 
