@@ -2436,7 +2436,6 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         }
         else if (hparams->iRegime == CONTACT_MECHANICS)
         {
-            constexpr bool applyToCarbon = true;
             constexpr bool applyToMetal = true;
 
             // 1. Heatup the system so that the NP melts. Heating happens until the height of the NP is small enough.
@@ -2448,14 +2447,20 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
             isHeating = !onlyCooling;
 
+            bool applyToCarbon = false;
+
             if (isHeating && (hparams->stepCount % hparams->stepThermostat == 0))
             {
+                ///@note: when heating, heat up only metal atoms for faster melting of the NP.
                 const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
                 ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
             }
             // 2. Cooldown the system to the finalTemperature and equilibrate at this temperature.
             else if (!isHeating && (hparams->stepCount % hparams->coolingStepThermostat == 0))
             {
+                ///@note: when cooling, apply thermostat to all the atoms
+                /// so that proper temperature of the whole system is maintained.
+                applyToCarbon = true;
                 const auto beta = calculateBeta(vvSum, hparams->finalTemperature, *hparams);
                 ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
             }
