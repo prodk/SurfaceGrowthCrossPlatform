@@ -12,7 +12,7 @@ CUDA_ROOT_DIR=/usr/local/cuda
 
 # CC compiler options:
 CC=g++
-CC_FLAGS=-std=c++11
+CC_FLAGS=-std=c++17
 CC_LIBS=
 
 ##########################################################
@@ -21,7 +21,7 @@ CC_LIBS=
 
 # NVCC compiler options:
 NVCC=nvcc
-NVCC_FLAGS=-std=c++11 -arch=sm_30
+NVCC_FLAGS=-std=c++17 -arch=sm_80
 NVCC_LIBS=
 
 # CUDA library directory:
