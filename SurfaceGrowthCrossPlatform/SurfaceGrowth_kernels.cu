@@ -2536,10 +2536,10 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
         {
             PrintSummary(fResults, hparams);
 
-            std::cout << "\r" << hparams->stepCount << "/" << hparams->stepLimit
+            std::cout << hparams->stepCount << "/" << hparams->stepLimit
                 << "/" << std::fixed << std::setprecision(2) << hparams->oneStep.sum << " ms"
                 << ", maxHeight: " << maxNPHeight << ", curHeight: " << hparams->particleSize.z
-                << (isHeating ? " heat" : " cool") << std::flush;
+                << (isHeating ? " heat" : " cool") << std::endl;
         }
         AccumProps (0, hparams);
     }
