@@ -31,7 +31,7 @@ const char *g_szInpFile = TEXT("sugr_in.txt");       // Input file.
 const char*  gszBckup[] = {TEXT("bckup0.sugr"),TEXT("bckup1.sugr")};// Note 2 backup files.
 bool   gbBckup = false;                         // Whether to use backup.
 bool   gbStartBckup = false;                    // Whether to start from backup file.
-int    g_hstepBckup = 10000;                    // How often backup file is created.
+int    g_hstepBckup = 200000;                    // How often backup file is created.
 
 // Interface variables.
 int    giRegime = BULK;                         // Regime of simulation.
