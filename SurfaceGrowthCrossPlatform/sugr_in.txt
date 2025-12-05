@@ -3,7 +3,7 @@
 10          # unit cells in x					       3
 10          # unit cells in y					       4
 10          # unit cells in z					       5
-850         # temperature (heating T for CM)(K)				    6
+1000         # temperature (heating T for CM)(K)				    6
 100         # number of metal atoms (if regime is shear or sg)	7
 0.035       # epsilon for metal-carbon LJ interaction, eV		8
 3.0135      # sigma for metal-carbon LJ interaction, angstrom	9
@@ -27,18 +27,19 @@
 1100        # deposit after this number of time steps		18
 
 # data handling
-10000        # create pdb file after this number of steps	19
+1000        # create pdb file after this number of steps	19
 100         # compute rdf every number of steps		20
 1           # create backup, 0 - no, 1 - yes			21
 0           # start from backup					22
 
 # contact mechanics
-96           # metal unit cells in x	        23
-96           # metal unit cells in y         24
-32           # metal unit cells in z         25
+20           # metal unit cells in x	        23
+20           # metal unit cells in y         24
+6           # metal unit cells in z         25
 0.5         # substrate extrusion: substrate width = metal_slab_width * (1 + extrusion) 26
 1.2         # vertical region extrusion as a fraction of the metal slab height 27
-40          # apply thermostat every steps (during heating for CM)  28
+5          # apply thermostat every steps (during heating for CM)  28
 298         # final temperature, used after the NP has melted 29
-0.5         # Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
-40          # How often the thermostat is applied during cooling.
+0.5         # Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction). #30
+20          # How often the thermostat is applied during cooling.   #31
+400         # Temperature of the substrate during heating, to make it more stable.   #32

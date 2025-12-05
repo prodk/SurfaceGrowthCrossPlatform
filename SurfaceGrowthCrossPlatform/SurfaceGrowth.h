@@ -164,6 +164,7 @@ struct SimParams
     real    finalTemperature; // Cooling T.
     real    maxNPHeightFraction; // Fraction of max NP's height to determine when cooling should be applied.
     int     coolingStepThermostat; // Frequency of the thermostat during cooling.
+    real    substrateTemperature; // Heating temperature of the substrate.
     // rdf variables
     real    rangeRdf;           // maximum distance between atoms for rdf
     int     limitRdf;           // number of measurements

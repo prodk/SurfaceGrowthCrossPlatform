@@ -94,6 +94,7 @@ real g_height_extrusion{ 0.f }; // Extrusion of the vertical region size as a fr
 real g_finalTemperature{ 298 }; // Final (cooling) temperature, K.
 real g_maxNPHeightFraction{ 0.0f }; // Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
 int  g_coolingStepThermostat{ g_hstepThermostat }; // How often thermostat is applied during the cooling phase.
+real g_substrateTemperature{ g_hTemperature }; // Temperature of the substrate during heating. Typically lower than heating T of the NP to avoid substrate's damage.
 
 // Host variables.
 float3  g_hvSum;                           // Total impulse.
@@ -269,6 +270,7 @@ int SetParams()
     g_hSimParams.finalTemperature = g_finalTemperature / g_hSimParams.temperatureU;
     g_hSimParams.maxNPHeightFraction = g_maxNPHeightFraction;
     g_hSimParams.coolingStepThermostat = g_coolingStepThermostat;
+    g_hSimParams.substrateTemperature = g_substrateTemperature / g_hSimParams.temperatureU;
 
     if(g_hstepAvg <=0)
         g_hstepAvg = 1;
@@ -493,6 +495,7 @@ TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T
             std::cout << "final T = " << g_hSimParams.finalTemperature * g_hSimParams.temperatureU << std::endl;
             std::cout << "Height fraction = " << g_hSimParams.maxNPHeightFraction << std::endl;
             std::cout << "Thermostat cooling step = " << g_hSimParams.coolingStepThermostat << std::endl;
+            std::cout << "Substrate T = " << g_hSimParams.substrateTemperature * g_hSimParams.temperatureU << std::endl;
         }
 
         if( g_hSimParams.bResult != 0 )
@@ -967,6 +970,10 @@ bool ReadInputFile(const char *szInpFile)
 
                 case 31:
                     g_coolingStepThermostat = atoi(szTmp); // Frequency of thermostat during the cooling phase.
+                    break;
+
+                case 32:
+                    g_substrateTemperature = atoi(szTmp); // Temperature of the substrate during the heating phase.
                     break;
 
             } // End switch row count.

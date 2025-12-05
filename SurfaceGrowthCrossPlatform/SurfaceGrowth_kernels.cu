@@ -479,7 +479,7 @@ __global__ void ApplyBoundaryCondK( float4 *dr )
     }
 }
 
-__global__ void ApplyBerendsenThermostat(float3* dv, real beta, bool applyToCarbon, bool applyToMetal)
+__global__ void ApplyBerendsenThermostat(float3* dv, real betaMetal, real betaCarbon, bool applyToCarbon, bool applyToMetal)
 {
     // Index of a molecule for current thread.
     const int n = blockIdx.x * blockDim.x + threadIdx.x;
@@ -491,6 +491,8 @@ __global__ void ApplyBerendsenThermostat(float3* dv, real beta, bool applyToCarb
 
     if (useThermostat)
     {
+        const auto beta = isMetal ? betaMetal : betaCarbon;
+
         dv[n].x = beta * dv[n].x;
         dv[n].y = beta * dv[n].y;
         dv[n].z = beta * dv[n].z;
@@ -2421,7 +2423,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
 
             ApplyBerendsenThermostat <<< dimGrid, dimBlock >>>
-                (dv, beta, applyToCarbon, applyToMetal); // If step > cool Me is not thermostatted.
+                (dv, beta, beta, applyToCarbon, applyToMetal); // If step > cool Me is not thermostatted.
         }
 
         // For SG apply thermostat to carbon atoms during all simulation.
@@ -2432,11 +2434,12 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
             const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
 
-            ApplyBerendsenThermostat <<< dimGrid, dimBlock >>>(dv, beta, applyToCarbon, applyToMetal);
+            ApplyBerendsenThermostat <<< dimGrid, dimBlock >>>(dv, beta, beta, applyToCarbon, applyToMetal);
         }
         else if (hparams->iRegime == CONTACT_MECHANICS)
         {
             constexpr bool applyToMetal = true;
+            constexpr bool applyToCarbon = true;
 
             // 1. Heatup the system so that the NP melts. Heating happens until the height of the NP is small enough.
             isHeating = hparams->particleSize.z < maxNPHeight;
@@ -2447,22 +2450,20 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
             isHeating = !onlyCooling;
 
-            bool applyToCarbon = true;
-
             if (isHeating && (hparams->stepCount % hparams->stepThermostat == 0))
             {
-                ///@note: when heating, heat up only metal atoms for faster melting of the NP.
-                const auto beta = calculateBeta(vvSum, hparams->temperature, *hparams);
-                ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
+                ///@note: when heating, use different temperatures for metal and C.
+                const auto betaMetal = calculateBeta(vvSum, hparams->temperature, *hparams);
+                const auto betaCarbon = calculateBeta(vvSum, hparams->substrateTemperature, *hparams);
+                ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, betaMetal, betaCarbon, applyToCarbon, applyToMetal);
             }
             // 2. Cooldown the system to the finalTemperature and equilibrate at this temperature.
             else if (!isHeating && (hparams->stepCount % hparams->coolingStepThermostat == 0))
             {
                 ///@note: when cooling, apply thermostat to all the atoms
                 /// so that proper temperature of the whole system is maintained.
-                applyToCarbon = true;
                 const auto beta = calculateBeta(vvSum, hparams->finalTemperature, *hparams);
-                ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, applyToCarbon, applyToMetal);
+                ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, beta, applyToCarbon, applyToMetal);
             }
         }
 
