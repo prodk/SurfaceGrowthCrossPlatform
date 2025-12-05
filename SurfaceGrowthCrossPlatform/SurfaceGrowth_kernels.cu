@@ -2447,7 +2447,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
             isHeating = !onlyCooling;
 
-            bool applyToCarbon = false;
+            bool applyToCarbon = true;
 
             if (isHeating && (hparams->stepCount % hparams->stepThermostat == 0))
             {
