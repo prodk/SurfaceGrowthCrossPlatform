@@ -2058,6 +2058,13 @@ real calculateBeta(real vvSum, real temperature, const SimParams& hparams)
                 (temperature * 1.5f * hparams.kB / kinEnergy - 1.f));
 }
 
+// Decrease the cooling temperature gradually, to avoid impulse shock.
+real calculateTargetTemperature(const SimParams& hparams)
+{
+    const auto newT = hparams.currentTemperature - hparams.deltaTemperature;
+    return newT < hparams.finalTemperature ? hparams.finalTemperature : newT;
+}
+
 ////////////////////////////
 // Wrappers calling kernels.
 ////////////////////////////
@@ -2446,7 +2453,10 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
 
             // If the cooling condition has been reached, prohibit heating.
             if (!isHeating && !onlyCooling)
+            {
                 onlyCooling = true;
+                hparams->currentTemperature = hparams->temperature - hparams->deltaTemperature; // Cooling starts from the heating T.
+            }
 
             isHeating = !onlyCooling;
 
@@ -2460,9 +2470,14 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             // 2. Cooldown the system to the finalTemperature and equilibrate at this temperature.
             else if (!isHeating && (hparams->stepCount % hparams->coolingStepThermostat == 0))
             {
+                if (hparams->currentTemperature != hparams->finalTemperature && (hparams->stepCount % hparams->stepEquil == 0))
+                {
+                    hparams->currentTemperature = calculateTargetTemperature(*hparams);
+                }
+
                 ///@note: when cooling, apply thermostat to all the atoms
                 /// so that proper temperature of the whole system is maintained.
-                const auto beta = calculateBeta(vvSum, hparams->finalTemperature, *hparams);
+                const auto beta = calculateBeta(vvSum, hparams->currentTemperature, *hparams);
                 ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, beta, applyToCarbon, applyToMetal);
             }
         }

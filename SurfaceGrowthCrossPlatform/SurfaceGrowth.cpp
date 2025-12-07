@@ -95,6 +95,7 @@ real g_finalTemperature{ 298 }; // Final (cooling) temperature, K.
 real g_maxNPHeightFraction{ 0.0f }; // Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
 int  g_coolingStepThermostat{ g_hstepThermostat }; // How often thermostat is applied during the cooling phase.
 real g_substrateTemperature{ g_hTemperature }; // Temperature of the substrate during heating. Typically lower than heating T of the NP to avoid substrate's damage.
+int  g_temperatureIntervals;    // Number of temperature intervals during cooling;
 
 // Host variables.
 float3  g_hvSum;                           // Total impulse.
@@ -271,6 +272,9 @@ int SetParams()
     g_hSimParams.maxNPHeightFraction = g_maxNPHeightFraction;
     g_hSimParams.coolingStepThermostat = g_coolingStepThermostat;
     g_hSimParams.substrateTemperature = g_substrateTemperature / g_hSimParams.temperatureU;
+
+    g_hSimParams.deltaTemperature = std::fabs(g_hSimParams.temperature - g_hSimParams.finalTemperature)
+                                  / static_cast<real>(g_temperatureIntervals);
 
     if(g_hstepAvg <=0)
         g_hstepAvg = 1;
@@ -496,6 +500,8 @@ TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T
             std::cout << "Height fraction = " << g_hSimParams.maxNPHeightFraction << std::endl;
             std::cout << "Thermostat cooling step = " << g_hSimParams.coolingStepThermostat << std::endl;
             std::cout << "Substrate T = " << g_hSimParams.substrateTemperature * g_hSimParams.temperatureU << std::endl;
+            std::cout << "T intervals = " << g_temperatureIntervals << std::endl;
+            std::cout << "delta T = " << g_hSimParams.deltaTemperature * g_hSimParams.temperatureU << std::endl;
         }
 
         if( g_hSimParams.bResult != 0 )
@@ -974,6 +980,10 @@ bool ReadInputFile(const char *szInpFile)
 
                 case 32:
                     g_substrateTemperature = atoi(szTmp); // Temperature of the substrate during the heating phase.
+                    break;
+
+                case 33:
+                    g_temperatureIntervals = atoi(szTmp); // Temperature of the substrate during the heating phase.
                     break;
 
             } // End switch row count.
