@@ -2455,7 +2455,7 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             if (!isHeating && !onlyCooling)
             {
                 onlyCooling = true;
-                hparams->currentTemperature = hparams->temperature - hparams->deltaTemperature; // Cooling starts from the heating T.
+                hparams->currentTemperature = hparams->substrateTemperature - hparams->deltaTemperature; // Cooling starts from the heating T.
             }
 
             isHeating = !onlyCooling;
