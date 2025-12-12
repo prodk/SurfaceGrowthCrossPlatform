@@ -167,6 +167,7 @@ struct SimParams
     real    substrateTemperature; // Heating temperature of the substrate.
     real    deltaTemperature;     // Temperature step during cooling.
     real    currentTemperature;
+    real    currentSubstrTemperature;
     // rdf variables
     real    rangeRdf;           // maximum distance between atoms for rdf
     int     limitRdf;           // number of measurements

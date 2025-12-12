@@ -2059,9 +2059,9 @@ real calculateBeta(real vvSum, real temperature, const SimParams& hparams)
 }
 
 // Decrease the cooling temperature gradually, to avoid impulse shock.
-real calculateTargetTemperature(const SimParams& hparams)
+real calculateTargetTemperature(const SimParams& hparams, real curT)
 {
-    const auto newT = hparams.currentTemperature - hparams.deltaTemperature;
+    const auto newT = curT - hparams.deltaTemperature;
     return newT < hparams.finalTemperature ? hparams.finalTemperature : newT;
 }
 
@@ -2455,7 +2455,8 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             if (!isHeating && !onlyCooling)
             {
                 onlyCooling = true;
-                hparams->currentTemperature = hparams->substrateTemperature - hparams->deltaTemperature; // Cooling starts from the heating T.
+                hparams->currentTemperature = hparams->temperature - hparams->deltaTemperature; // Cooling starts from the heating T.
+                hparams->currentSubstrTemperature = hparams->substrateTemperature - hparams->deltaTemperature;
             }
 
             isHeating = !onlyCooling;
@@ -2472,13 +2473,19 @@ char* DoComputationsW(float4 *hr, float3 *hv, float3 *ha, float4* hspecForcesAnd
             {
                 if (hparams->currentTemperature != hparams->finalTemperature && (hparams->stepCount % hparams->stepEquil == 0))
                 {
-                    hparams->currentTemperature = calculateTargetTemperature(*hparams);
+                    hparams->currentTemperature = calculateTargetTemperature(*hparams, hparams->currentTemperature);
+                }
+
+                if (hparams->currentSubstrTemperature != hparams->finalTemperature && (hparams->stepCount % hparams->stepEquil == 0))
+                {
+                    hparams->currentSubstrTemperature = calculateTargetTemperature(*hparams, hparams->currentSubstrTemperature);
                 }
 
                 ///@note: when cooling, apply thermostat to all the atoms
                 /// so that proper temperature of the whole system is maintained.
-                const auto beta = calculateBeta(vvSum, hparams->currentTemperature, *hparams);
-                ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, beta, beta, applyToCarbon, applyToMetal);
+                const auto betaMetal = calculateBeta(vvSum, hparams->currentTemperature, *hparams);
+                const auto betaCarbon = calculateBeta(vvSum, hparams->currentSubstrTemperature, *hparams);
+                ApplyBerendsenThermostat <<< dimGrid, dimBlock >>> (dv, betaMetal, betaCarbon, applyToCarbon, applyToMetal);
             }
         }
 
