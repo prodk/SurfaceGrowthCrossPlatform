@@ -581,7 +581,7 @@ void GrapheneInit()
     g_hSimParams.sigmaLJ = g_hsigma / g_ha0;                        // 2.4945 angstrom
     g_hSimParams.rCutLJ = 2.5*g_hSimParams.sigmaLJ;
     g_hSimParams.rrCutLJ = g_hSimParams.rCutLJ*g_hSimParams.rCutLJ;
-    g_hSimParams.initSlabHeight = 0.5 * g_hSimParams.sigmaLJ;      // Initial height related to the LJ energy minimum distance
+    g_hSimParams.initSlabHeight = 1.122 * g_hSimParams.sigmaLJ;      // Initial height related to the LJ energy minimum distance
 }
 
 void CalculateNumberOfAtoms()
