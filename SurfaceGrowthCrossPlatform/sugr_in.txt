@@ -3,14 +3,14 @@
 10          # unit cells in x					       3
 10          # unit cells in y					       4
 10          # unit cells in z					       5
-1000         # temperature (heating T for CM)(K)				    6
+1100         # temperature (heating T for CM)(K)				    6
 100         # number of metal atoms (if regime is shear or sg)	7
 0.035       # epsilon for metal-carbon LJ interaction, eV		8
 3.0135      # sigma for metal-carbon LJ interaction, angstrom	9
 
 # time parameters
 
-1000000     # step limit					10
+1600000     # step limit					10
 0.001       # time step						11
 250         # averaging						12
 20000       # equilibration. For CM - # of steps between decreasing the cooling Temperature 13
@@ -27,20 +27,20 @@
 1100        # deposit after this number of time steps		18
 
 # data handling
-10000        # create pdb file after this number of steps	19
+20000        # create pdb file after this number of steps	19
 100         # compute rdf every number of steps		20
 0           # create backup, 0 - no, 1 - yes			21
 0           # start from backup					22
 
 # contact mechanics
-28           # metal unit cells in x	        23
-28           # metal unit cells in y         24
-7            # metal unit cells in z         25
+60           # metal unit cells in x	        23
+60           # metal unit cells in y         24
+15            # metal unit cells in z         25
 0.5         # substrate extrusion: substrate width = metal_slab_width * (1 + extrusion) 26
 1.2         # vertical region extrusion as a fraction of the metal slab height 27
-40          # apply thermostat every steps (during heating for CM)  28
+10          # apply thermostat every steps (during heating for CM)  28
 298         # final temperature, used after the NP has melted 29
-0.6         # Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
+0.3         # Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
 40          # How often the thermostat is applied during cooling.
 550         # Temperature of the substrate during heating, to make it more stable.   32
 10          # Number of temperature intervals during cooling.                       33
