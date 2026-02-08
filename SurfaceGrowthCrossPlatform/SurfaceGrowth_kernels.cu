@@ -815,7 +815,8 @@ __global__ void ComputeForcesK (    float3  *a,             // Acceleration (out
     int     nnk;                // Neighbors of the nearest neighbor.
     int     countk, m, l;       // Counts.
     float4  rm;                 // Coordinates of the second neighbor.
-    float3  frictForceVal;
+    float3  frictForceVal;      // Friction force.
+    float4  specForceEn;        // Forces acting on metal atoms from carbon ones and vice versa, and corresponding pot. energy.
 
     int     atomType;           // If == 0 then metal, if == 1, then carbon.
 
@@ -837,6 +838,9 @@ __global__ void ComputeForcesK (    float3  *a,             // Acceleration (out
 
         // Zero friction force.
         VZero(frictForceVal);
+
+        // Important: zero the special forces and energy too!
+        VZero(specForceEn);
 
         VZero(fSum);                    // Step 2.
         A = dr[i];                      // Step 3.
@@ -912,10 +916,10 @@ __global__ void ComputeForcesK (    float3  *a,             // Acceleration (out
                         VVAdd(frictForceVal, C);
 
                         // Save the forces acting from carbon on metal.
-                        VVAdd(specForcesAndEnergy[i], C);
+                        VVAdd(specForceEn, C);
 
                         // Save the potential energy.
-                        specForcesAndEnergy[i].w += uVal;
+                        specForceEn.w += uVal;
                     }
                     break;  // End metal.
 
@@ -938,10 +942,10 @@ __global__ void ComputeForcesK (    float3  *a,             // Acceleration (out
                         VVAdd(fSum, C);     // Step 13.
 
                         // Save the forces acting from metal on carbon.
-                        VVAdd(specForcesAndEnergy[i], C);
+                        VVAdd(specForceEn, C);
 
                         // Save the potential energy.
-                        specForcesAndEnergy[i].w += uVal;
+                        specForceEn.w += uVal;
 
                     }
                     else                // Neighbor is also carbon, so compute spring force.
@@ -1108,6 +1112,9 @@ label:
             // !Save friction force only if the correct regime and metal atoms!
             if(fForce != 0)
                 fForce[i] = frictForceVal.x;
+
+            if (specForcesAndEnergy)
+                specForcesAndEnergy[i] = specForceEn;
         }
         else if( atomType == 1 )
         {
@@ -3009,13 +3016,13 @@ void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForce
                 << r[idx].x * hparams->lengthU << " "
                 << r[idx].y * hparams->lengthU << " "
                 << r[idx].z * hparams->lengthU << " "
-                << specForcesAndEnergy[idx].x  << " "
-                << specForcesAndEnergy[idx].y  << " "
-                << specForcesAndEnergy[idx].z  << " "
-                << specForcesAndEnergy[idx].w << " "
-                << ha[idx].x << " "
-                << ha[idx].y << " "
-                << ha[idx].z << " " << r[idx].w << "\n";
+                << specForcesAndEnergy[idx].x / hparams->forceU << " "
+                << specForcesAndEnergy[idx].y / hparams->forceU << " "
+                << specForcesAndEnergy[idx].z / hparams->forceU << " "
+                << specForcesAndEnergy[idx].w * hparams->enU << " "
+                << ha[idx].x / hparams->forceU << " "
+                << ha[idx].y / hparams->forceU << " "
+                << ha[idx].z / hparams->forceU << " " << r[idx].w * hparams->enU << "\n";
             outFile << fss.str();
         }
 
