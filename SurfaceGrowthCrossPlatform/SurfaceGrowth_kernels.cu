@@ -1112,9 +1112,6 @@ label:
             // !Save friction force only if the correct regime and metal atoms!
             if(fForce != 0)
                 fForce[i] = frictForceVal.x;
-
-            if (specForcesAndEnergy)
-                specForcesAndEnergy[i] = specForceEn;
         }
         else if( atomType == 1 )
         {
@@ -1122,6 +1119,9 @@ label:
             // Save potential energy in .w component of coordinate.
             dr[i].w = 0.5f*uSum;            // !Don't forget about 0.5.
         }
+
+        if (specForcesAndEnergy)
+            specForcesAndEnergy[i] = specForceEn;
 // End Algorithm 2.
     }   // End if(i < dparams.nMol).
 }
@@ -2992,6 +2992,23 @@ void PrintRdf(SimParams *hparams, uint *hHistRdf)
     fclose(rdf);
 }
 
+inline static void DumpLine(SimParams* hparams, float4* r, float4* specForcesAndEnergy, float3* ha, const int idx, const real mass, std::ofstream& outFile)
+{
+    std::stringstream fss;
+    fss << idx << " "
+        << r[idx].x * hparams->lengthU << " "
+        << r[idx].y * hparams->lengthU << " "
+        << r[idx].z * hparams->lengthU << " "
+        << specForcesAndEnergy[idx].x / hparams->forceU << " "
+        << specForcesAndEnergy[idx].y / hparams->forceU << " "
+        << specForcesAndEnergy[idx].z / hparams->forceU << " "
+        << specForcesAndEnergy[idx].w * hparams->enU << " "
+        << mass * ha[idx].x / hparams->forceU << " "
+        << mass * ha[idx].y / hparams->forceU << " "
+        << mass * ha[idx].z / hparams->forceU << " " << r[idx].w * hparams->enU << "\n";
+    outFile << fss.str();
+}
+
 void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForcesAndEnergy, float3* ha)
 {
     const auto fileNumber = hparams->stepCount / hparams->stepPdb;
@@ -3009,21 +3026,17 @@ void DumpSpecialForcesAndEnergy(SimParams* hparams, float4* r, float4* specForce
     if (outFile.is_open())
     {
         outFile << "id x y z force_x force_y force_z potential_energy tot_force_x tot_force_y tot_force_z tot_potential_energy\n";
-        for (int idx = 0; idx < hparams->nMol; ++idx)
+        // Dump metal.
+        for (int idx = 0; idx < hparams->nMolMe; ++idx)
         {
-            std::stringstream fss;
-            fss << idx << " "
-                << r[idx].x * hparams->lengthU << " "
-                << r[idx].y * hparams->lengthU << " "
-                << r[idx].z * hparams->lengthU << " "
-                << specForcesAndEnergy[idx].x / hparams->forceU << " "
-                << specForcesAndEnergy[idx].y / hparams->forceU << " "
-                << specForcesAndEnergy[idx].z / hparams->forceU << " "
-                << specForcesAndEnergy[idx].w * hparams->enU << " "
-                << ha[idx].x / hparams->forceU << " "
-                << ha[idx].y / hparams->forceU << " "
-                << ha[idx].z / hparams->forceU << " " << r[idx].w * hparams->enU << "\n";
-            outFile << fss.str();
+            DumpLine(hparams, r, specForcesAndEnergy, ha, idx, hparams->massMe, outFile);
+        }
+
+        // Dump carbon.
+        for (int idx = hparams->nMolMe; idx < hparams->nMol; ++idx)
+        {
+            constexpr real mass{ 1.0f };
+            DumpLine(hparams, r, specForcesAndEnergy, ha, idx, mass, outFile);
         }
 
         outFile.close();
