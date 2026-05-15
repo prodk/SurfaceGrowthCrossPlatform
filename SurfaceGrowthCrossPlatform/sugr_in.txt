@@ -1,16 +1,16 @@
 3           # regime, 0 - bulk, 1 - surface growth, 2 - shear, 3 - contact meachanics	1
-0           # metal Cu(0), Ag(1), Au(2), Ni(3), Al(4), Pb(5)	2
+5           # metal Cu(0), Ag(1), Au(2), Ni(3), Al(4), Pb(5)	2
 10          # unit cells in x					       3
 10          # unit cells in y					       4
 10          # unit cells in z					       5
-1100         # temperature (heating T for CM)(K)				    6
+600         # temperature (heating T for CM)(K)				    6
 100         # number of metal atoms (if regime is shear or sg)	7
-0.035       # epsilon for metal-carbon LJ interaction, eV		8
-3.0135      # sigma for metal-carbon LJ interaction, angstrom	9
+0.01751     # epsilon for metal-carbon LJ interaction, eV		8
+3.288       # sigma for metal-carbon LJ interaction, angstrom	9
 
 # time parameters
 
-1600000     # step limit					10
+3600000     # step limit					10
 0.001       # time step						11
 250         # averaging						12
 20000       # equilibration. For CM - # of steps between decreasing the cooling Temperature 13
@@ -18,7 +18,7 @@
 # shear parameters
 
 0.0001      # increment of shear			14
-120000      # cool interval					15
+10000      # cool interval					15
 
 # surface growth parameters
 
@@ -27,7 +27,7 @@
 1100        # deposit after this number of time steps		18
 
 # data handling
-20000        # create pdb file after this number of steps	19
+30000        # create pdb file after this number of steps	19
 100         # compute rdf every number of steps		20
 0           # create backup, 0 - no, 1 - yes			21
 0           # start from backup					22
@@ -35,12 +35,13 @@
 # contact mechanics
 60           # metal unit cells in x	        23
 60           # metal unit cells in y         24
-15            # metal unit cells in z         25
+15           # metal unit cells in z         25
 0.5         # substrate extrusion: substrate width = metal_slab_width * (1 + extrusion) 26
-1.2         # vertical region extrusion as a fraction of the metal slab height 27
-10          # apply thermostat every steps (during heating for CM)  28
+1.8         # vertical region extrusion as a fraction of the metal slab height 27
+200          # apply thermostat every steps (during heating for CM)  28
 298         # final temperature, used after the NP has melted 29
-0.3         # Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
-40          # How often the thermostat is applied during cooling.
-550         # Temperature of the substrate during heating, to make it more stable.   32
-10          # Number of temperature intervals during cooling.                       33
+0.6         # Heating of NP happens until the NP's height is < originalNPHeight * (1. + g_maxNPHeightFraction).
+20          # How often the thermostat is applied during cooling.
+600         # Temperature of the substrate during heating, to make it more stable.   32
+6          # Number of temperature intervals during cooling.                        33
+1.0         # 34 A factor to control the initial height of the metal slab above graphene. 1.0 corresponds to sigmaLJ.

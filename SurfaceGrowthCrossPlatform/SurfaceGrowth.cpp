@@ -96,6 +96,7 @@ real g_maxNPHeightFraction{ 0.0f }; // Heating of NP happens until the NP's heig
 int  g_coolingStepThermostat{ g_hstepThermostat }; // How often thermostat is applied during the cooling phase.
 real g_substrateTemperature{ g_hTemperature }; // Temperature of the substrate during heating. Typically lower than heating T of the NP to avoid substrate's damage.
 int  g_temperatureIntervals;    // Number of temperature intervals during cooling;
+float g_initHeightFactor{ 1.122 }; // A factor that multiplies sigmaLJ to control the initial height of the metal slab above the graphene sheet.
 
 // Host variables.
 float3  g_hvSum;                           // Total impulse.
@@ -468,10 +469,9 @@ int SetupJob()
             g_hSimParams.temperature*g_hSimParams.temperatureU);
 
         if (g_hSimParams.iRegime == CONTACT_MECHANICS)
-            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_cx%i_cy%i_Av%i_Pdb%i_T%3.0f_lim%i"),
+            sprintf(szBuf, TEXT("cm_%s_x%i_y%i_z%i_Me%i_cx%i_cy%i_T%3.0f_lim%i"),
             g_hSimParams.szNameMe, g_unitCellMe.x, g_unitCellMe.y, g_unitCellMe.z,
             g_hSimParams.nMolMe, g_hSimParams.initUcell.x, g_hSimParams.initUcell.y,
-            g_hSimParams.stepAvg, g_hSimParams.stepPdb,
             g_hSimParams.temperature * g_hSimParams.temperatureU, g_hSimParams.stepLimit);
 
         lstrcat(szBuf, TEXT(".txt"));
@@ -502,6 +502,7 @@ TEXT("stepCnt impulse totEn(eV) totEn.rms(eV) potEn(eV) potEn.rms(eV) Tempr(K) T
             std::cout << "Substrate T = " << g_hSimParams.substrateTemperature * g_hSimParams.temperatureU << std::endl;
             std::cout << "T intervals = " << g_temperatureIntervals << std::endl;
             std::cout << "delta T = " << g_hSimParams.deltaTemperature * g_hSimParams.temperatureU << std::endl;
+            std::cout << "initHeightFactor = " << g_initHeightFactor << std::endl;
         }
 
         if( g_hSimParams.bResult != 0 )
@@ -581,7 +582,7 @@ void GrapheneInit()
     g_hSimParams.sigmaLJ = g_hsigma / g_ha0;                        // 2.4945 angstrom
     g_hSimParams.rCutLJ = 2.5*g_hSimParams.sigmaLJ;
     g_hSimParams.rrCutLJ = g_hSimParams.rCutLJ*g_hSimParams.rCutLJ;
-    g_hSimParams.initSlabHeight = 1.122 * g_hSimParams.sigmaLJ;      // Initial height related to the LJ energy minimum distance
+    g_hSimParams.initSlabHeight = g_initHeightFactor * g_hSimParams.sigmaLJ;      // Initial height related to the LJ energy minimum distance
 }
 
 void CalculateNumberOfAtoms()
@@ -984,6 +985,10 @@ bool ReadInputFile(const char *szInpFile)
 
                 case 33:
                     g_temperatureIntervals = atoi(szTmp); // Temperature of the substrate during the heating phase.
+                    break;
+
+                case 34:
+                    g_initHeightFactor = atof(szTmp); // A factor to control the initial height of the metal slab above graphene.
                     break;
 
             } // End switch row count.
